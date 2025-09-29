@@ -44,11 +44,15 @@ export function DashboardCards({ guests }: DashboardCardsProps) {
     const todayDate = new Date();
     todayDate.setHours(0, 0, 0, 0); // Zera o horário para comparar apenas a data
 
-    const currentGuests = guests.filter(g => {
-      const checkInDate = new Date(g.dataEntrada + 'T00:00:00');
-      const checkOutDate = new Date(g.dataSaida + 'T00:00:00');
-      return g.status === 'em-andamento' && todayDate >= checkInDate && todayDate < checkOutDate;
-    }).length;
+    // DashboardCards.tsx
+
+// Dentro da função calculateStats
+
+   const currentGuests = guests.filter(g => {
+     const checkInDate = new Date(g.dataEntrada + 'T00:00:00');
+     const checkOutDate = new Date(g.dataSaida + 'T00:00:00');
+     return g.status === 'em-andamento' && todayDate >= checkInDate && todayDate < checkOutDate;
+   }).reduce((sum, g) => sum + (+g.cama || 0), 0); // CORRIGIDO: Converte g.cama para número antes de somar
     const todayCheckIns = guests.filter(g => g.dataEntrada === today).length;
     const todayCheckOuts = guests.filter(g => g.dataSaida === today).length;
     
