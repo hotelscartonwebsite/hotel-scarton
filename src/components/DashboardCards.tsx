@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  Users, 
-  UserCheck, 
-  UserX, 
-  DollarSign, 
-  TrendingUp, 
-  CalendarClock 
+import {
+  Users,
+  UserCheck,
+  UserX,
+  DollarSign,
+  TrendingUp,
+  CalendarClock
 } from "lucide-react";
 import { Guest } from "@/types/guest";
 import { GuestListPopup } from "./GuestListPopup";
@@ -39,31 +39,34 @@ export function DashboardCards({ guests }: DashboardCardsProps) {
   });
 
   const today = new Date().toISOString().split('T')[0];
-  
-   const calculateStats = (): DashboardStats => {
+
+  const calculateStats = (): DashboardStats => {
     const todayDate = new Date();
     todayDate.setHours(0, 0, 0, 0); // Zera o horário para comparar apenas a data
 
     // DashboardCards.tsx
 
-// Dentro da função calculateStats
+    // Dentro da função calculateStats
 
-   const currentGuests = guests.filter(g => {
-     const checkInDate = new Date(g.dataEntrada + 'T00:00:00');
-     const checkOutDate = new Date(g.dataSaida + 'T00:00:00');
-     return g.status === 'em-andamento' && todayDate >= checkInDate && todayDate < checkOutDate;
-   }).reduce((sum, g) => sum + (+g.cama || 0), 0); // CORRIGIDO: Converte g.cama para número antes de somar
-    const todayCheckIns = guests.filter(g => g.dataEntrada === today).length;
-    const todayCheckOuts = guests.filter(g => g.dataSaida === today).length;
-    
+    const currentGuests = guests.filter(g => {
+      const checkInDate = new Date(g.dataEntrada + 'T00:00:00');
+      const checkOutDate = new Date(g.dataSaida + 'T00:00:00');
+      return g.status === 'em-andamento' && todayDate >= checkInDate && todayDate < checkOutDate;
+    }).reduce((sum, g) => sum + (+g.cama || 0), 0); // CORRIGIDO: Converte g.cama para número antes de somar
+    const todayCheckIns = guests
+      .filter(g => g.dataEntrada === today)
+      .reduce((sum, g) => sum + (+g.cama || 0), 0); // <-- Soma o número de camas
+const todayCheckOuts = guests
+      .filter(g => g.dataSaida === today)
+      .reduce((sum, g) => sum + (+g.cama || 0), 0); // <-- Soma o número de camas
     const dailyRevenue = guests
       .filter(g => g.dataEntrada === today)
       .reduce((sum, g) => sum + g.valor, 0);
-    
+
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
     const weekAgoStr = weekAgo.toISOString().split('T')[0];
-    
+
     const weeklyRevenue = guests
       .filter(g => g.dataEntrada >= weekAgoStr && g.dataEntrada <= today)
       .reduce((sum, g) => sum + g.valor, 0);
@@ -72,14 +75,14 @@ export function DashboardCards({ guests }: DashboardCardsProps) {
     tomorrowDate.setDate(tomorrowDate.getDate() + 1);
     const sevenDaysFromNowDate = new Date();
     sevenDaysFromNowDate.setDate(sevenDaysFromNowDate.getDate() + 7);
-    
+
     const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
     const sevenDaysFromNowStr = sevenDaysFromNowDate.toISOString().split('T')[0];
 
-    const upcomingCheckIns = guests.filter(g => 
+    const upcomingCheckIns = guests.filter(g =>
       g.dataEntrada >= tomorrowStr && g.dataEntrada <= sevenDaysFromNowStr
     ).length;
-    
+
     return {
       currentGuests,
       todayCheckIns,
@@ -215,9 +218,8 @@ export function DashboardCards({ guests }: DashboardCardsProps) {
             <Card
               key={index}
               onClick={() => isClickable && handleCardClick(card.id)}
-              className={`shadow-card hover:shadow-elevated transition-all duration-300 ${
-                isClickable ? 'cursor-pointer' : ''
-              }`}
+              className={`shadow-card hover:shadow-elevated transition-all duration-300 ${isClickable ? 'cursor-pointer' : ''
+                }`}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
