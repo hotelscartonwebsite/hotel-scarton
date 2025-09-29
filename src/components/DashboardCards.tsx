@@ -2,13 +2,18 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   Users,
   UserCheck,
   UserX,
   DollarSign,
   TrendingUp,
-  CalendarClock
+  CalendarClock,
+  CalendarIcon
 } from "lucide-react";
 import { Guest } from "@/types/guest";
 import { GuestListPopup } from "./GuestListPopup";
@@ -28,6 +33,9 @@ interface DashboardStats {
 }
 
 export function DashboardCards({ guests }: DashboardCardsProps) {
+  const [entradasDate, setEntradasDate] = useState<Date | undefined>(new Date());
+  const [saidasDate, setSaidasDate] = useState<Date | undefined>(new Date());
+
   const [popupState, setPopupState] = useState<{
     isOpen: boolean;
     title: string;
@@ -38,37 +46,38 @@ export function DashboardCards({ guests }: DashboardCardsProps) {
     data: [],
   });
 
-  const today = new Date().toISOString().split('T')[0];
-
   const calculateStats = (): DashboardStats => {
+    const entradasDateStr = entradasDate ? format(entradasDate, 'yyyy-MM-dd') : '';
+    const saidasDateStr = saidasDate ? format(saidasDate, 'yyyy-MM-dd') : '';
+
     const todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0); // Zera o horário para comparar apenas a data
-
-    // DashboardCards.tsx
-
-    // Dentro da função calculateStats
+    todayDate.setHours(0, 0, 0, 0);
 
     const currentGuests = guests.filter(g => {
       const checkInDate = new Date(g.dataEntrada + 'T00:00:00');
       const checkOutDate = new Date(g.dataSaida + 'T00:00:00');
       return g.status === 'em-andamento' && todayDate >= checkInDate && todayDate < checkOutDate;
-    }).reduce((sum, g) => sum + (+g.cama || 0), 0); // CORRIGIDO: Converte g.cama para número antes de somar
+    }).reduce((sum, g) => sum + (+g.cama || 0), 0);
+
     const todayCheckIns = guests
-      .filter(g => g.dataEntrada === today)
-      .reduce((sum, g) => sum + (+g.cama || 0), 0); // <-- Soma o número de camas
-const todayCheckOuts = guests
-      .filter(g => g.dataSaida === today)
-      .reduce((sum, g) => sum + (+g.cama || 0), 0); // <-- Soma o número de camas
+      .filter(g => g.dataEntrada === entradasDateStr)
+      .reduce((sum, g) => sum + (+g.cama || 0), 0);
+
+    const todayCheckOuts = guests
+      .filter(g => g.dataSaida === saidasDateStr)
+      .reduce((sum, g) => sum + (+g.cama || 0), 0);
+
     const dailyRevenue = guests
-      .filter(g => g.dataEntrada === today)
+      .filter(g => g.dataEntrada === entradasDateStr)
       .reduce((sum, g) => sum + g.valor, 0);
 
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
     const weekAgoStr = weekAgo.toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
 
     const weeklyRevenue = guests
-      .filter(g => g.dataEntrada >= weekAgoStr && g.dataEntrada <= today)
+      .filter(g => g.dataEntrada >= weekAgoStr && g.dataEntrada <= todayStr)
       .reduce((sum, g) => sum + g.valor, 0);
 
     const tomorrowDate = new Date();
@@ -99,12 +108,14 @@ const todayCheckOuts = guests
     let title = '';
     let filteredGuests: Guest[] = [];
 
+    const entradasDateStr = entradasDate ? format(entradasDate, 'yyyy-MM-dd') : '';
+    const saidasDateStr = saidasDate ? format(saidasDate, 'yyyy-MM-dd') : '';
+
     switch (cardId) {
       case 'currentGuests':
         title = 'Hóspedes Atuais';
         const todayDate = new Date();
         todayDate.setHours(0, 0, 0, 0);
-
         filteredGuests = guests.filter(g => {
           const checkInDate = new Date(g.dataEntrada + 'T00:00:00');
           const checkOutDate = new Date(g.dataSaida + 'T00:00:00');
@@ -112,14 +123,13 @@ const todayCheckOuts = guests
         });
         break;
       case 'todayCheckIns':
-        title = 'Hóspedes com Check-in Hoje';
-        filteredGuests = guests.filter(g => g.dataEntrada === today);
+        title = `Hóspedes com Check-in em ${entradasDate ? format(entradasDate, 'dd/MM/yyyy') : 'data inválida'}`;
+        filteredGuests = guests.filter(g => g.dataEntrada === entradasDateStr);
         break;
       case 'todayCheckOuts':
-        title = 'Hóspedes com Check-out Hoje';
-        filteredGuests = guests.filter(g => g.dataSaida === today);
+        title = `Hóspedes com Check-out em ${saidasDate ? format(saidasDate, 'dd/MM/yyyy') : 'data inválida'}`;
+        filteredGuests = guests.filter(g => g.dataSaida === saidasDateStr);
         break;
-      // ATUALIZADO: Adicionada a lógica para o novo card clicável
       case 'upcomingCheckIns':
         title = 'Próximos Check-ins (7 dias)';
         const tomorrowDate = new Date();
@@ -148,6 +158,11 @@ const todayCheckOuts = guests
     }).format(value);
   };
 
+  const isToday = (date: Date | undefined) => {
+    if (!date) return false;
+    return new Date().toDateString() === date.toDateString();
+  };
+
   const cards = [
     {
       id: "currentGuests",
@@ -160,27 +175,27 @@ const todayCheckOuts = guests
     },
     {
       id: "todayCheckIns",
-      title: "Entradas Hoje",
+      title: `Entradas ${isToday(entradasDate) ? 'Hoje' : `em ${entradasDate ? format(entradasDate, 'dd/MM') : ''}`}`,
       value: stats.todayCheckIns.toString(),
-      description: "Novos check-ins",
+      description: "Hóspedes chegando no dia",
       icon: UserCheck,
       color: "text-success",
       bgGradient: "bg-gradient-success",
     },
     {
       id: "todayCheckOuts",
-      title: "Saídas Hoje",
+      title: `Saídas ${isToday(saidasDate) ? 'Hoje' : `em ${saidasDate ? format(saidasDate, 'dd/MM') : ''}`}`,
       value: stats.todayCheckOuts.toString(),
-      description: "Check-outs programados",
+      description: "Hóspedes saindo no dia",
       icon: UserX,
       color: "text-warning",
       bgGradient: "bg-gradient-to-br from-warning/20 to-warning/5",
     },
     {
       id: "dailyRevenue",
-      title: "Receita do Dia",
+      title: `Receita ${isToday(entradasDate) ? 'do Dia' : `de ${entradasDate ? format(entradasDate, 'dd/MM') : ''}`}`,
       value: formatCurrency(stats.dailyRevenue),
-      description: "Faturamento hoje",
+      description: "Faturamento do dia selecionado",
       icon: DollarSign,
       color: "text-success",
       bgGradient: "bg-gradient-success",
@@ -205,7 +220,6 @@ const todayCheckOuts = guests
     },
   ];
 
-  // ATUALIZADO: Adicionado 'upcomingCheckIns' para tornar o card clicável
   const clickableCardIds = ['currentGuests', 'todayCheckIns', 'todayCheckOuts', 'upcomingCheckIns'];
 
   return (
@@ -214,19 +228,51 @@ const todayCheckOuts = guests
         {cards.map((card, index) => {
           const Icon = card.icon;
           const isClickable = clickableCardIds.includes(card.id);
+          const showCalendar = card.id === 'todayCheckIns' || card.id === 'todayCheckOuts';
+
           return (
             <Card
               key={index}
               onClick={() => isClickable && handleCardClick(card.id)}
-              className={`shadow-card hover:shadow-elevated transition-all duration-300 ${isClickable ? 'cursor-pointer' : ''
-                }`}
+              className={`shadow-card hover:shadow-elevated transition-all duration-300 ${isClickable ? 'cursor-pointer' : ''}`}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {card.title}
                 </CardTitle>
-                <div className={`p-2 rounded-lg ${card.bgGradient}`}>
-                  <Icon className={`h-4 w-4 ${card.color === 'text-primary' || card.color === 'text-success' ? 'text-white' : card.color}`} />
+                <div className="flex items-center gap-2">
+                  {showCalendar && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          className="p-1 rounded-full hover:bg-muted"
+                          onClick={(e) => e.stopPropagation()} // <-- ADICIONE ESTA LINHA
+                        >
+                          <CalendarIcon className="h-4 w-4 text-white bg-gray-600 rounded-sm p-0.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-auto p-0"
+                        align="end"
+                        onClick={(e) => e.stopPropagation()} // <-- ADICIONE ESTA LINHA
+                      >
+                        <Calendar
+                          mode="single"
+                          selected={card.id === 'todayCheckIns' ? entradasDate : saidasDate}
+                          onSelect={(date) => {
+                            // Fecha o popover ao selecionar uma data para melhor UX
+                            if (card.id === 'todayCheckIns') setEntradasDate(date);
+                            if (card.id === 'todayCheckOuts') setSaidasDate(date);
+                          }}
+                          initialFocus
+                          locale={ptBR}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                  <div className={`p-2 rounded-lg ${card.bgGradient}`}>
+                    <Icon className={`h-4 w-4 ${card.color === 'text-primary' || card.color === 'text-success' ? 'text-white' : card.color}`} />
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
