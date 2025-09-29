@@ -35,6 +35,7 @@ interface DashboardStats {
 export function DashboardCards({ guests }: DashboardCardsProps) {
   const [entradasDate, setEntradasDate] = useState<Date | undefined>(new Date());
   const [saidasDate, setSaidasDate] = useState<Date | undefined>(new Date());
+  const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
 
   const [popupState, setPopupState] = useState<{
     isOpen: boolean;
@@ -242,11 +243,16 @@ export function DashboardCards({ guests }: DashboardCardsProps) {
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   {showCalendar && (
-                    <Popover>
+                    <Popover
+                      open={openPopoverId === card.id} // Controla se está aberto
+                      onOpenChange={(isOpen) => {
+                        setOpenPopoverId(isOpen ? card.id : null); // Atualiza o estado ao abrir/fechar
+                      }}
+                    >
                       <PopoverTrigger asChild>
                         <button
                           className="p-1 rounded-full hover:bg-muted"
-                          onClick={(e) => e.stopPropagation()} // <-- ADICIONE ESTA LINHA
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <CalendarIcon className="h-4 w-4 text-white bg-gray-600 rounded-sm p-0.5" />
                         </button>
@@ -254,15 +260,20 @@ export function DashboardCards({ guests }: DashboardCardsProps) {
                       <PopoverContent
                         className="w-auto p-0"
                         align="end"
-                        onClick={(e) => e.stopPropagation()} // <-- ADICIONE ESTA LINHA
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <Calendar
                           mode="single"
                           selected={card.id === 'todayCheckIns' ? entradasDate : saidasDate}
                           onSelect={(date) => {
-                            // Fecha o popover ao selecionar uma data para melhor UX
-                            if (card.id === 'todayCheckIns') setEntradasDate(date);
-                            if (card.id === 'todayCheckOuts') setSaidasDate(date);
+                            // 1. Atualiza a data selecionada
+                            if (card.id === 'todayCheckIns') {
+                              setEntradasDate(date);
+                            } else {
+                              setSaidasDate(date);
+                            }
+                            // 2. Fecha o popover
+                            setOpenPopoverId(null);
                           }}
                           initialFocus
                           locale={ptBR}
