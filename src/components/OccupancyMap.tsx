@@ -26,32 +26,44 @@ export function OccupancyMap({ guests }: OccupancyMapProps) {
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
 
   // Lógica para mapear hóspedes ocupados e de checkout
-  const { occupiedUnitsMap, checkoutUnitsMap } = useMemo(() => {
-    // Pega a data de hoje e zera o horário para comparar apenas o dia
+  // Lógica para mapear hóspedes ocupados, de check-in e de checkout
+  const { occupiedUnitsMap, checkoutUnitsMap, checkinUnitsMap } = useMemo(() => { // ALTERADO
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const todayTime = today.getTime();
 
     const occupiedMap = new Map<string, Guest>();
     const checkoutMap = new Map<string, Guest>();
-    
+    const checkinMap = new Map<string, Guest>(); // NOVO MAPA
+
     guests.forEach(guest => {
-      // Converte as datas do hóspede para objetos Date.
+      if (guest.status !== 'em-andamento') return;
+
       const checkInDate = new Date(guest.dataEntrada + 'T00:00:00');
       const checkOutDate = new Date(guest.dataSaida + 'T00:00:00');
+      const checkInTime = checkInDate.getTime();
+      const checkOutTime = checkOutDate.getTime();
 
-      if (guest.status === 'em-andamento' && today >= checkInDate) {
-        // Se hoje é o dia de checkout
-        if (today.getTime() === checkOutDate.getTime()) {
-          checkoutMap.set(guest.leito, guest);
-        }
-        // Se ainda está hospedado (antes do checkout)
-        else if (today < checkOutDate) {
-          occupiedMap.set(guest.leito, guest);
-        }
+      // LÓGICA ALTERADA para categorizar os hóspedes
+      if (checkOutTime === todayTime) {
+        checkoutMap.set(guest.leito, guest);
+      }
+      // Adicionamos a verificação de check-in também
+      if (checkInTime === todayTime) {
+        checkinMap.set(guest.leito, guest);
+      }
+      // Ocupação normal (não está saindo nem entrando hoje)
+      if (todayTime > checkInTime && todayTime < checkOutTime) {
+        occupiedMap.set(guest.leito, guest);
       }
     });
-    
-    return { occupiedUnitsMap: occupiedMap, checkoutUnitsMap: checkoutMap };
+
+    // Retorna os três mapas
+    return {
+      occupiedUnitsMap: occupiedMap,
+      checkoutUnitsMap: checkoutMap,
+      checkinUnitsMap: checkinMap
+    };
   }, [guests]);
 
   const formatDate = (dateString: string) => {
@@ -62,34 +74,63 @@ export function OccupancyMap({ guests }: OccupancyMapProps) {
 
   // Função para renderizar uma unidade (quarto ou apartamento)
   const renderUnit = (unitNumber: string) => {
-    const isOccupied = occupiedUnitsMap.has(unitNumber);
-    const isCheckout = checkoutUnitsMap.has(unitNumber);
-    const guest = occupiedUnitsMap.get(unitNumber) || checkoutUnitsMap.get(unitNumber);
+    // LÓGICA ALTERADA para incluir o estado de troca
+    const isTurnaround = checkoutUnitsMap.has(unitNumber) && checkinUnitsMap.has(unitNumber);
+    const isCheckoutOnly = checkoutUnitsMap.has(unitNumber) && !isTurnaround;
+    // Ocupado agora inclui hóspedes que entraram hoje
+    const isOccupied = occupiedUnitsMap.has(unitNumber) || (checkinUnitsMap.has(unitNumber) && !isTurnaround);
+
+    // Prioriza mostrar o hóspede que está entrando
+    const guest = checkinUnitsMap.get(unitNumber) || occupiedUnitsMap.get(unitNumber) || checkoutUnitsMap.get(unitNumber);
+    const guestOut = checkoutUnitsMap.get(unitNumber);
+    const guestIn = checkinUnitsMap.get(unitNumber);
 
     const unitClasses = cn(
       "flex flex-col items-center justify-center rounded-lg border transition-all duration-200 cursor-pointer",
-      "h-14 w-14 sm:h-16 sm:w-16",
-      isCheckout
-        ? "bg-yellow-500 text-yellow-900 shadow-md hover:shadow-lg"
+      "h-14 w-14 sm:h-16 sm:w-16 shadow-md hover:shadow-lg",
+      // As classes de cor de fundo são removidas para o caso de 'turnaround'
+      isCheckoutOnly
+        ? "bg-yellow-500 text-yellow-900"
         : isOccupied
-        ? "bg-primary text-primary-foreground shadow-md hover:shadow-lg"
-        : "bg-muted/50 hover:bg-muted text-muted-foreground"
+          ? "bg-primary text-primary-foreground"
+          : "bg-muted/50 hover:bg-muted text-muted-foreground shadow-none" // Remove a sombra para disponíveis
     );
+
+    const unitStyle = isTurnaround ? {
+      // NOVO: Substitua 'var(--primary)' por um valor RGB ou Hex da sua cor primária
+      // Exemplo usando um azul comum (equivalente a Tailwind blue-500):
+      background: 'linear-gradient(to top right, #eab308 49.5%, #3b82f6 50.5%)', 
+      color: 'white', 
+      borderColor: '#3b82f6' // Ajuste também a cor da borda
+    } : {};
+
 
     return (
       <TooltipProvider key={unitNumber} delayDuration={100}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className={unitClasses} onClick={() => (isOccupied || isCheckout) && setSelectedGuest(guest)}>
+            {/* Adicionado o style ao div */}
+            <div
+              className={unitClasses}
+              style={unitStyle}
+              onClick={() => (isOccupied || isCheckoutOnly || isTurnaround) && setSelectedGuest(guest)}
+            >
               <span className="font-bold text-base sm:text-lg">{unitNumber}</span>
-              {(isOccupied || isCheckout) && <User className="h-4 w-4 mt-1 opacity-80" />}
+              {/* O ícone aparece em todos os estados, exceto 'disponível' */}
+              {(isOccupied || isCheckoutOnly || isTurnaround) && <User className="h-4 w-4 mt-1 opacity-80" />}
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            {(isOccupied || isCheckout) && guest ? (
+            {/* LÓGICA ALTERADA do Tooltip */}
+            {isTurnaround ? (
+              <div className="text-sm">
+                <p>Sai: <span className="font-bold">{guestOut?.nome}</span></p>
+                <p>Entra: <span className="font-bold">{guestIn?.nome}</span></p>
+              </div>
+            ) : (isOccupied || isCheckoutOnly) && guest ? (
               <div className="text-sm">
                 <p className="font-bold">{guest.nome}</p>
-                <p>{isCheckout ? "Checkout hoje" : "Clique para ver detalhes"}</p>
+                <p>{isCheckoutOnly ? "Checkout hoje" : "Clique para ver detalhes"}</p>
               </div>
             ) : (
               <p>Disponível</p>
@@ -131,21 +172,21 @@ export function OccupancyMap({ guests }: OccupancyMapProps) {
               {APARTMENT_NUMBERS.map(renderUnit)}
             </div>
           </div>
-          
+
           {/* Legenda */}
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-6 border-t">
-              <div className="flex items-center gap-2 text-sm">
-                  <div className="h-4 w-4 rounded-full bg-primary" />
-                  <span>Ocupado</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                  <div className="h-4 w-4 rounded-full bg-yellow-500" />
-                  <span>Checkout Hoje</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                  <div className="h-4 w-4 rounded-full bg-muted/50 border" />
-                  <span>Disponível</span>
-              </div>
+            <div className="flex items-center gap-2 text-sm">
+              <div className="h-4 w-4 rounded-full bg-primary" />
+              <span>Ocupado</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <div className="h-4 w-4 rounded-full bg-yellow-500" />
+              <span>Checkout Hoje</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <div className="h-4 w-4 rounded-full bg-muted/50 border" />
+              <span>Disponível</span>
+            </div>
           </div>
         </CardContent>
       </Card>
