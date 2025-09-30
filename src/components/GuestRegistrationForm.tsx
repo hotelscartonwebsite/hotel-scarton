@@ -145,26 +145,10 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
       return false;
     }
 
-    if (formData.cpf.trim()) {
-      const cpfRegex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/;
-      if (!cpfRegex.test(formData.cpf)) {
-        toast.error("Por favor, insira um CPF completo no formato XXX.XXX.XXX-XX.");
-        return false;
-      }
-    }
-
     if (formData.telefone.trim()) {
       const phoneRegex = /^\(\d{2}\) \d{5}-\d{4}$/;
       if (!phoneRegex.test(formData.telefone)) {
         toast.error("Por favor, insira um telefone completo no formato (XX) XXXXX-XXXX.");
-        return false;
-      }
-    }
-
-    if (formData.cpf.trim()) {
-      const cpfExists = await onCheckCpf(formData.cpf, guest?.id);
-      if (cpfExists) {
-        toast.error("Este CPF já está cadastrado para outro hóspede.");
         return false;
       }
     }
@@ -384,7 +368,7 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
         <CardTitle className="flex items-center justify-between text-white">
           <div className="flex items-center gap-2">
             <UserPlus className="h-5 w-5" />
-            Cadastro de Hóspade
+            Cadastro de Hóspede
           </div>
           <Button variant="ghost" size="sm" onClick={onCancel} className="text-white hover:bg-white/20">
             <X className="h-4 w-4" />
