@@ -11,6 +11,13 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
+import {
   Search, Filter, Edit, Trash2, CheckCircle, Circle,
   BedDouble, CalendarDays, DollarSign, Phone, MessageSquare, CreditCard
 } from "lucide-react";
@@ -43,7 +50,8 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
         (guest.cpf && guest.cpf.includes(searchTerm)) ||
         (guest.telefone && guest.telefone.includes(searchTerm)) ||
         guest.leito.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        guest.cama.includes(searchTerm)
+        guest.cama.includes(searchTerm) ||
+        (guest.observacao && guest.observacao.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
     if (statusFilter !== "all") {
@@ -68,7 +76,6 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
     return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('pt-BR');
   };
 
-  // Nova função para formatar a exibição dos nomes
   const getDisplayName = (name: string) => {
     if (!name) return "Hóspede não informado";
     const names = name.split(',').map(n => n.trim()).filter(n => n);
@@ -134,7 +141,7 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
           <div className="relative md:col-span-2 lg:col-span-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nome, CPF, telefone..."
+              placeholder="Buscar por nome, CPF, telefone ou observação..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 bg-muted/50 w-full"
@@ -185,6 +192,7 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
                 <th className="text-left p-3 text-sm font-medium text-muted-foreground">Entrada/Saída</th>
                 <th className="text-left p-3 text-sm font-medium text-muted-foreground">Pagamento</th>
                 <th className="text-left p-3 text-sm font-medium text-muted-foreground">Status Pag.</th>
+                <th className="text-left p-3 text-sm font-medium text-muted-foreground">Observação</th>
                 <th className="text-left p-3 text-sm font-medium text-muted-foreground">Status</th>
                 <th className="text-left p-3 text-sm font-medium text-muted-foreground">Ações</th>
               </tr>
@@ -207,6 +215,25 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
                     <div className="text-xs text-muted-foreground">{getPaymentMethodText(guest.metodoPagamento)}</div>
                   </td>
                   <td className="p-3">{getPaymentStatusBadge(guest.statusPagamento)}</td>
+                  <td className="p-3 max-w-[200px] truncate text-sm text-muted-foreground">
+                    {guest.observacao ? (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="link" className="p-0 h-auto text-white underline truncate max-w-[180px]">
+                            {guest.observacao}
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Observação</DialogTitle>
+                          </DialogHeader>
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                            {guest.observacao}
+                          </p>
+                        </DialogContent>
+                      </Dialog>
+                    ) : "—"}
+                  </td>
                   <td className="p-3">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -281,19 +308,33 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
                   <span>{getPaymentMethodText(guest.metodoPagamento)}</span>
                 </div>
               </div>
-               <div className="flex justify-between items-center text-sm border-t pt-3">
-                 <span className="text-muted-foreground">Status Pagamento:</span>
-                 {getPaymentStatusBadge(guest.statusPagamento)}
-               </div>
+              <div className="flex justify-between items-center text-sm border-t pt-3">
+                <span className="text-muted-foreground">Status Pagamento:</span>
+                {getPaymentStatusBadge(guest.statusPagamento)}
+              </div>
 
               {guest.observacao && (
-                 <div className="text-sm border-t pt-3 space-y-2">
-                    <div className="flex items-center gap-2 font-medium">
-                        <MessageSquare className="h-4 w-4 text-primary"/>
-                        Observações
-                    </div>
-                    <p className="text-muted-foreground text-xs pl-6">{guest.observacao}</p>
-                 </div>
+                <div className="text-sm border-t pt-3 space-y-2">
+                  <div className="flex items-center gap-2 font-medium text-primary">
+                    <MessageSquare className="h-4 w-4" />
+                    Observações
+                  </div>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="link" className="pl-6 text-xs italic text-blue-600 underline h-auto p-0">
+                        Ver observação completa
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Observação</DialogTitle>
+                      </DialogHeader>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                        {guest.observacao}
+                      </p>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               )}
               
               <div>
@@ -326,4 +367,3 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
     </Card>
   );
 }
-
