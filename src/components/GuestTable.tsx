@@ -4,15 +4,15 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { 
-  Search, Filter, Edit, Trash2, Download, CheckCircle, Circle, 
-  BedDouble, CalendarDays, DollarSign, Phone // Novos ícones para os cards
+import {
+  Search, Filter, Edit, Trash2, CheckCircle, Circle,
+  BedDouble, CalendarDays, DollarSign, Phone, MessageSquare, CreditCard
 } from "lucide-react";
 import { toast } from "sonner";
 import { Guest } from "@/types/guest";
@@ -25,14 +25,38 @@ interface GuestTableProps {
 }
 
 export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTableProps) {
-  const [filteredGuests, setFilteredGuests] = useState<Guest[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [accommodationFilter, setAccommodationFilter] = useState<string>("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all");
 
   const sortedGuests = useMemo(() => {
     return [...guests].sort((a, b) => new Date(a.dataEntrada).getTime() - new Date(b.dataEntrada).getTime());
   }, [guests]);
+
+  const filteredGuests = useMemo(() => {
+    let filtered = sortedGuests;
+
+    if (searchTerm) {
+      filtered = filtered.filter(guest =>
+        guest.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (guest.cpf && guest.cpf.includes(searchTerm)) ||
+        (guest.telefone && guest.telefone.includes(searchTerm)) ||
+        guest.leito.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        guest.cama.includes(searchTerm)
+      );
+    }
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(guest => guest.status === statusFilter);
+    }
+    if (accommodationFilter !== "all") {
+      filtered = filtered.filter(guest => guest.tipoAcomodacao === accommodationFilter);
+    }
+    if (paymentStatusFilter !== "all") {
+      filtered = filtered.filter(guest => guest.statusPagamento === paymentStatusFilter);
+    }
+    return filtered;
+  }, [sortedGuests, searchTerm, statusFilter, accommodationFilter, paymentStatusFilter]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -44,34 +68,28 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
     return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('pt-BR');
   };
 
-  const applyFilters = (search: string, status: string, accommodation: string) => {
-    let filtered = sortedGuests;
-    if (search) {
-      filtered = filtered.filter(guest =>
-        guest.nome.toLowerCase().includes(search.toLowerCase()) ||
-        guest.cpf.includes(search) ||
-        guest.telefone.includes(search) || 
-        guest.leito.toLowerCase().includes(search.toLowerCase()) ||
-        guest.cama.includes(search)
-      );
+  // Nova função para formatar a exibição dos nomes
+  const getDisplayName = (name: string) => {
+    if (!name) return "Hóspede não informado";
+    const names = name.split(',').map(n => n.trim()).filter(n => n);
+    if (names.length > 1) {
+      const extraGuests = names.length - 1;
+      return `${names[0]} (+${extraGuests} hóspede${extraGuests > 1 ? 's' : ''})`;
     }
-    if (status !== "all") {
-      filtered = filtered.filter(guest => guest.status === status);
-    }
-    if (accommodation !== "all") {
-      filtered = filtered.filter(guest => guest.tipoAcomodacao === accommodation);
-    }
-    setFilteredGuests(filtered);
+    return names[0] || "Hóspede não informado";
   };
 
-  React.useEffect(() => {
-    applyFilters(searchTerm, statusFilter, accommodationFilter);
-  }, [sortedGuests, searchTerm, statusFilter, accommodationFilter]);
-
   const handleDelete = async (guest: Guest) => {
-    if (window.confirm(`Tem certeza que deseja excluir ${guest.nome}?`)) {
-      await onDelete(guest.id!);
-    }
+    toast("Tem certeza que deseja excluir este hóspede?", {
+      action: {
+        label: "Excluir",
+        onClick: async () => await onDelete(guest.id!),
+      },
+      cancel: {
+        label: "Cancelar",
+        onClick: () => {},
+      },
+    });
   };
 
   const getStatusBadge = (status: string) => {
@@ -82,64 +100,91 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
     );
   };
 
+  const getPaymentStatusBadge = (status?: 'pago' | 'pendente' | '') => {
+    if (status === "pago") {
+      return <Badge className="bg-green-100 text-green-800 border-green-300">Pago</Badge>;
+    }
+    if (status === "pendente") {
+      return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">Pendente</Badge>;
+    }
+    return <Badge variant="outline">N/A</Badge>;
+  };
+
+  const getPaymentMethodText = (method?: string) => {
+    const map: { [key: string]: string } = {
+      'nao-informado': 'Não Informado',
+      'pix': 'PIX',
+      'cartao': 'Cartão',
+      'dinheiro': 'Dinheiro'
+    };
+    return (method && map[method]) || 'N/A';
+  }
+
   return (
     <Card className="shadow-card">
       <CardHeader>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <CardTitle className="flex items-center gap-2">
-          <Search className="h-5 w-5" />
-          Registro de Hóspedes
-        </CardTitle>
-      </div>
-      
-        <div className="flex flex-col md:flex-row gap-4 mt-4">
-          <div className="relative flex-1">
+          <CardTitle className="flex items-center gap-2">
+            <Search className="h-5 w-5" />
+            Registro de Hóspedes
+          </CardTitle>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+          <div className="relative md:col-span-2 lg:col-span-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Buscar por nome, CPF, telefone..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-muted/50"
+              className="pl-10 bg-muted/50 w-full"
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full md:w-[180px] bg-muted/50">
+            <SelectTrigger className="w-full bg-muted/50">
               <Filter className="mr-2 h-4 w-4" />
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="all">Todos os Status</SelectItem>
               <SelectItem value="em-andamento">Em andamento</SelectItem>
               <SelectItem value="finalizado">Finalizado</SelectItem>
             </SelectContent>
           </Select>
           <Select value={accommodationFilter} onValueChange={setAccommodationFilter}>
-            <SelectTrigger className="w-full md:w-[180px] bg-muted/50">
+            <SelectTrigger className="w-full bg-muted/50">
               <SelectValue placeholder="Acomodação" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="all">Todas Acomodações</SelectItem>
               <SelectItem value="quarto">Quarto</SelectItem>
               <SelectItem value="apartamento">Apartamento</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
+            <SelectTrigger className="w-full bg-muted/50">
+              <SelectValue placeholder="Status Pagamento" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Pagamentos</SelectItem>
+              <SelectItem value="pago">Pago</SelectItem>
+              <SelectItem value="pendente">Pendente</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
-      
+
       <CardContent>
         {/* --- VISUALIZAÇÃO EM TABELA PARA DESKTOP --- */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left p-3 text-sm font-medium text-muted-foreground">Nome</th>
-                <th className="text-left p-3 text-sm font-medium text-muted-foreground">CPF</th>
-                <th className="text-left p-3 text-sm font-medium text-muted-foreground">Telefone</th>
+                <th className="text-left p-3 text-sm font-medium text-muted-foreground">Hóspede(s)</th>
                 <th className="text-left p-3 text-sm font-medium text-muted-foreground">Leito/Cama</th>
-                <th className="text-left p-3 text-sm font-medium text-muted-foreground">Tipo Cama</th>
-                <th className="text-left p-3 text-sm font-medium text-muted-foreground">Entrada</th>
-                <th className="text-left p-3 text-sm font-medium text-muted-foreground">Saída</th>
-                <th className="text-left p-3 text-sm font-medium text-muted-foreground">Valor</th>
+                <th className="text-left p-3 text-sm font-medium text-muted-foreground">Entrada/Saída</th>
+                <th className="text-left p-3 text-sm font-medium text-muted-foreground">Pagamento</th>
+                <th className="text-left p-3 text-sm font-medium text-muted-foreground">Status Pag.</th>
                 <th className="text-left p-3 text-sm font-medium text-muted-foreground">Status</th>
                 <th className="text-left p-3 text-sm font-medium text-muted-foreground">Ações</th>
               </tr>
@@ -147,26 +192,26 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
             <tbody>
               {filteredGuests.map((guest) => (
                 <tr key={guest.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                  <td className="p-3 font-medium">{guest.nome}</td>
-                  <td className="p-3 text-muted-foreground">{guest.cpf}</td>
-                  <td className="p-3 text-muted-foreground">{guest.telefone}</td>
+                  <td className="p-3">
+                    <div className="font-medium" title={guest.nome}>{getDisplayName(guest.nome)}</div>
+                    {guest.cpf && <div className="text-xs text-muted-foreground">CPF {guest.cpf}</div>}
+                  </td>
                   <td className="p-3">
                     <span className="font-mono text-sm bg-muted px-2 py-1 rounded">{guest.leito}-{guest.cama}</span>
                   </td>
-                  <td className="p-3">
-                    <span className="text-xs bg-secondary px-2 py-1 rounded-full">
-                      {guest.tipoCama === 'solteiro' ? 'Solteiro' : 
-                       guest.tipoCama === 'casal' ? 'Casal' : 'Casal e Solteiro'}
-                    </span>
+                  <td className="p-3 text-sm">
+                    {formatDate(guest.dataEntrada)} - {formatDate(guest.dataSaida)}
                   </td>
-                  <td className="p-3 text-sm">{formatDate(guest.dataEntrada)}</td>
-                  <td className="p-3 text-sm">{formatDate(guest.dataSaida)}</td>
-                  <td className="p-3 font-medium text-success">{formatCurrency(guest.valor)}</td>
+                  <td className="p-3">
+                    <div className="font-medium text-success">{formatCurrency(guest.valor)}</div>
+                    <div className="text-xs text-muted-foreground">{getPaymentMethodText(guest.metodoPagamento)}</div>
+                  </td>
+                  <td className="p-3">{getPaymentStatusBadge(guest.statusPagamento)}</td>
                   <td className="p-3">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-auto p-1 rounded-full hover:bg-muted cursor-pointer">
-                           {getStatusBadge(guest.status)}
+                          {getStatusBadge(guest.status)}
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
@@ -201,8 +246,8 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
             <div key={guest.id} className="p-4 border rounded-lg bg-muted/20 space-y-4">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-bold text-lg">{guest.nome}</p>
-                  <p className="text-sm text-muted-foreground">{guest.cpf}</p>
+                  <p className="font-bold text-lg" title={guest.nome}>{getDisplayName(guest.nome)}</p>
+                  {guest.cpf && <p className="text-sm text-muted-foreground">CPF {guest.cpf}</p>}
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => onEdit(guest)} className="h-8 w-8 p-0">
@@ -219,11 +264,11 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
                   <Phone className="h-4 w-4 text-primary" />
                   <span>{guest.telefone}</span>
                 </div>
-                 <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <BedDouble className="h-4 w-4 text-primary" />
                   <span className="font-mono bg-muted px-2 py-1 rounded">{guest.leito}-{guest.cama}</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 col-span-2">
                   <CalendarDays className="h-4 w-4 text-primary" />
                   <span>{formatDate(guest.dataEntrada)} a {formatDate(guest.dataSaida)}</span>
                 </div>
@@ -231,21 +276,31 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
                   <DollarSign className="h-4 w-4 text-primary" />
                   <span className="font-medium text-success">{formatCurrency(guest.valor)}</span>
                 </div>
+                 <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-primary" />
+                  <span>{getPaymentMethodText(guest.metodoPagamento)}</span>
+                </div>
               </div>
+               <div className="flex justify-between items-center text-sm border-t pt-3">
+                 <span className="text-muted-foreground">Status Pagamento:</span>
+                 {getPaymentStatusBadge(guest.statusPagamento)}
+               </div>
 
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Tipo de cama:</span>
-                <span className="text-xs bg-secondary px-2 py-1 rounded-full">
-                  {guest.tipoCama === 'solteiro' ? 'Solteiro' : 
-                   guest.tipoCama === 'casal' ? 'Casal' : 'Casal e Solteiro'}
-                </span>
-              </div>
+              {guest.observacao && (
+                 <div className="text-sm border-t pt-3 space-y-2">
+                    <div className="flex items-center gap-2 font-medium">
+                        <MessageSquare className="h-4 w-4 text-primary"/>
+                        Observações
+                    </div>
+                    <p className="text-muted-foreground text-xs pl-6">{guest.observacao}</p>
+                 </div>
+              )}
               
               <div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="w-full h-auto py-1.5 px-2">
-                       {getStatusBadge(guest.status)}
+                      {getStatusBadge(guest.status)}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-[calc(100vw-50px)]">
@@ -271,3 +326,4 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
     </Card>
   );
 }
+

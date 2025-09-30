@@ -5,15 +5,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CalendarIcon, UserPlus, X } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { CalendarIcon, UserPlus, X, PlusCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Guest } from "@/types/guest";
 
-// Interface para gerenciar os dados do formulário
+// Interface do formulário atualizada para lidar com múltiplos nomes
 interface GuestFormData {
   leito: string;
   cama: string;
-  nome: string;
+  nomes: string[]; // Alterado de 'nome' para 'nomes' (array)
   cpf: string;
   telefone: string;
   dataEntrada: string;
@@ -21,42 +22,41 @@ interface GuestFormData {
   valor: string;
   tipoAcomodacao: 'quarto' | 'apartamento' | '';
   tipoCama: 'solteiro' | 'casal' | 'casal-e-solteiro' | '';
+  metodoPagamento: 'nao-informado' | 'pix' | 'cartao' | 'dinheiro' | '';
+  statusPagamento: 'pago' | 'pendente' | '';
+  observacao: string;
 }
 
-// Interface para as propriedades do componente
 interface GuestRegistrationFormProps {
-  guest?: Guest; // Hóspede opcional, para modo de edição
+  guest?: Guest;
   onSubmit: (data: Omit<Guest, 'id' | 'createdAt'>) => Promise<void>;
   onCancel: () => void;
   onCheckCpf: (cpf: string, excludeId?: string) => Promise<boolean>;
   onCheckRoomAvailability: (leito: string, dataEntrada: string, dataSaida: string, excludeId?: string) => Promise<boolean>;
 }
 
-// Função utilitária para aplicar a máscara de CPF (XXX.XXX.XXX-XX)
 const maskCPF = (value: string) => {
   return value
-    .replace(/\D/g, "") // Remove todos os caracteres que não são dígitos
-    .replace(/(\d{3})(\d)/, "$1.$2") // Adiciona um ponto após o terceiro dígito
-    .replace(/(\d{3})(\d)/, "$1.$2") // Adiciona um ponto após o sexto dígito
-    .replace(/(\d{3})(\d{1,2})/, "$1-$2") // Adiciona um hífen após o nono dígito
-    .replace(/(-\d{2})\d+?$/, "$1"); // Garante que apenas dois dígitos existam após o hífen
+    .replace(/\D/g, "")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})/, "$1-$2")
+    .replace(/(-\d{2})\d+?$/, "$1");
 };
 
-// Função utilitária para aplicar a máscara de telefone ((XX) XXXXX-XXXX)
 const maskPhone = (value: string) => {
   return value
-    .replace(/\D/g, "") // Remove todos os caracteres que não são dígitos
-    .replace(/(\d{2})(\d)/, "($1) $2") // Adiciona parênteses e um espaço após os dois primeiros dígitos (DDD)
-    .replace(/(\d{5})(\d)/, "$1-$2") // Adiciona um hífen após o quinto dígito do número
-    .replace(/(-\d{4})\d+?$/, "$1"); // Garante que apenas quatro dígitos existam após o hífen
+    .replace(/\D/g, "")
+    .replace(/(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d)/, "$1-$2")
+    .replace(/(-\d{4})\d+?$/, "$1");
 };
 
 export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, onCheckRoomAvailability }: GuestRegistrationFormProps) {
-  // Estado para armazenar os dados do formulário
   const [formData, setFormData] = useState<GuestFormData>({
     leito: "",
     cama: "",
-    nome: "",
+    nomes: [""], // Inicia com um campo de nome vazio
     cpf: "",
     telefone: "",
     dataEntrada: "",
@@ -64,17 +64,19 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
     valor: "",
     tipoAcomodacao: "",
     tipoCama: "",
+    metodoPagamento: "nao-informado",
+    statusPagamento: "pendente",
+    observacao: "",
   });
-  // Estado para controlar o status de carregamento do botão de submit
   const [loading, setLoading] = useState(false);
 
-  // Efeito para preencher o formulário com dados do hóspede quando em modo de edição
   useEffect(() => {
     if (guest) {
       setFormData({
         leito: guest.leito,
         cama: guest.cama,
-        nome: guest.nome,
+        // Se houver nome, divide por vírgula para popular os campos, senão, inicia com um campo
+        nomes: guest.nome ? guest.nome.split(',').map(n => n.trim()) : [""],
         cpf: guest.cpf,
         telefone: guest.telefone,
         dataEntrada: guest.dataEntrada,
@@ -82,12 +84,14 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
         valor: guest.valor.toString(),
         tipoAcomodacao: guest.tipoAcomodacao,
         tipoCama: guest.tipoCama,
+        metodoPagamento: guest.metodoPagamento || 'nao-informado',
+        statusPagamento: guest.statusPagamento || 'pendente',
+        observacao: guest.observacao || '',
       });
     }
   }, [guest]);
 
-  // Função para lidar com a mudança de valores nos inputs, aplicando as máscaras
-  const handleInputChange = (field: keyof GuestFormData, value: string) => {
+  const handleInputChange = (field: keyof Omit<GuestFormData, 'nomes'>, value: string) => {
     let finalValue = value;
     if (field === 'cpf') {
       finalValue = maskCPF(value);
@@ -96,27 +100,51 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
     }
     setFormData((prev) => ({ ...prev, [field]: finalValue }));
   };
+  
+  // Função para lidar com a mudança nos campos de nome
+  const handleNomeChange = (index: number, value: string) => {
+    const novosNomes = [...formData.nomes];
+    novosNomes[index] = value;
+    setFormData(prev => ({ ...prev, nomes: novosNomes }));
+  };
 
-  // Função para validar todos os campos do formulário antes do envio
+  // Função para adicionar um novo campo de nome
+  const addNomeField = () => {
+    setFormData(prev => ({ ...prev, nomes: [...prev.nomes, ""] }));
+  };
+
+  // Função para remover um campo de nome
+  const removeNomeField = (index: number) => {
+    if (formData.nomes.length > 1) { // Impede que o último campo seja removido
+      const novosNomes = formData.nomes.filter((_, i) => i !== index);
+      setFormData(prev => ({ ...prev, nomes: novosNomes }));
+    }
+  };
+
   const validateForm = async () => {
-    // Campos obrigatórios (excluindo CPF e telefone)
     const requiredFields = {
       leito: formData.leito,
       cama: formData.cama,
-      nome: formData.nome,
       dataEntrada: formData.dataEntrada,
       dataSaida: formData.dataSaida,
       valor: formData.valor,
       tipoAcomodacao: formData.tipoAcomodacao,
       tipoCama: formData.tipoCama,
+      metodoPagamento: formData.metodoPagamento,
+      statusPagamento: formData.statusPagamento,
     };
 
-    if (Object.values(requiredFields).some(value => !value.trim())) {
-      toast.error("Por favor, preencha todos os campos obrigatórios.");
+    if (Object.values(requiredFields).some(value => !value || (typeof value === 'string' && !value.trim()))) {
+      toast.error("Por favor, preencha todos os campos obrigatórios (*).");
       return false;
     }
 
-    // Validar CPF apenas se foi preenchido
+    // Valida se todos os campos de nome estão preenchidos
+    if(formData.nomes.some(nome => !nome.trim())) {
+      toast.error("Por favor, preencha o nome de todos os hóspedes.");
+      return false;
+    }
+
     if (formData.cpf.trim()) {
       const cpfRegex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/;
       if (!cpfRegex.test(formData.cpf)) {
@@ -125,7 +153,6 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
       }
     }
 
-    // Validar telefone apenas se foi preenchido
     if (formData.telefone.trim()) {
       const phoneRegex = /^\(\d{2}\) \d{5}-\d{4}$/;
       if (!phoneRegex.test(formData.telefone)) {
@@ -134,7 +161,6 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
       }
     }
 
-    // Verificar CPF duplicado apenas se foi preenchido
     if (formData.cpf.trim()) {
       const cpfExists = await onCheckCpf(formData.cpf, guest?.id);
       if (cpfExists) {
@@ -143,16 +169,15 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
       }
     }
 
-
     if (new Date(formData.dataSaida) <= new Date(formData.dataEntrada)) {
       toast.error("A data de saída deve ser posterior à data de entrada.");
       return false;
     }
 
     const roomIsAvailable = await onCheckRoomAvailability(
-      formData.leito, 
-      formData.dataEntrada, 
-      formData.dataSaida, 
+      formData.leito,
+      formData.dataEntrada,
+      formData.dataSaida,
       guest?.id
     );
     if (!roomIsAvailable) {
@@ -163,10 +188,9 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
     return true;
   };
 
-  // Função para lidar com o envio do formulário
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!(await validateForm())) return;
 
     setLoading(true);
@@ -174,7 +198,8 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
       const guestData = {
         leito: formData.leito,
         cama: formData.cama,
-        nome: formData.nome,
+        // Junta os nomes em uma única string, separados por vírgula
+        nome: formData.nomes.filter(n => n.trim()).join(', '),
         cpf: formData.cpf,
         telefone: formData.telefone,
         dataEntrada: formData.dataEntrada,
@@ -183,14 +208,18 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
         tipoAcomodacao: formData.tipoAcomodacao as 'quarto' | 'apartamento',
         tipoCama: formData.tipoCama as 'solteiro' | 'casal' | 'casal-e-solteiro',
         status: 'em-andamento' as const,
+        metodoPagamento: formData.metodoPagamento as 'nao-informado' | 'pix' | 'cartao' | 'dinheiro',
+        statusPagamento: formData.statusPagamento as 'pago' | 'pendente',
+        observacao: formData.observacao,
       };
 
       await onSubmit(guestData);
-      
+
       if (!guest) {
         setFormData({
-          leito: "", cama: "", nome: "", cpf: "", telefone: "",
+          leito: "", cama: "", nomes: [""], cpf: "", telefone: "",
           dataEntrada: "", dataSaida: "", valor: "", tipoAcomodacao: "", tipoCama: "",
+          metodoPagamento: "nao-informado", statusPagamento: "pendente", observacao: "",
         });
       }
     } catch (error) {
@@ -200,7 +229,6 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
     }
   };
 
-  // Conteúdo JSX do formulário, que será reutilizado no Dialog
   const formContent = (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -213,17 +241,38 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
           <Input id="cama" value={formData.cama} onChange={(e) => handleInputChange("cama", e.target.value)} placeholder="Ex: 1, 2..." className="bg-muted/50" />
         </div>
       </div>
+      
+      {/* Seção de Nomes Dinâmicos */}
       <div className="space-y-2">
-        <Label htmlFor="nome">Nome do Hóspede *</Label>
-        <Input id="nome" value={formData.nome} onChange={(e) => handleInputChange("nome", e.target.value)} placeholder="Nome completo" className="bg-muted/50" />
+        <Label>Nome do(s) Hóspede(s) *</Label>
+        {formData.nomes.map((nome, index) => (
+          <div key={index} className="flex items-center gap-2">
+            <Input
+              value={nome}
+              onChange={(e) => handleNomeChange(index, e.target.value)}
+              placeholder={`Hóspede ${index + 1}`}
+              className="bg-muted/50"
+            />
+            {formData.nomes.length > 1 && (
+              <Button type="button" variant="ghost" size="icon" onClick={() => removeNomeField(index)} className="text-destructive">
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        ))}
+        <Button type="button" variant="outline" size="sm" onClick={addNomeField} className="mt-2">
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Adicionar Hóspede
+        </Button>
       </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="cpf">CPF</Label>
+          <Label htmlFor="cpf">CPF (Responsável)</Label>
           <Input id="cpf" value={formData.cpf} onChange={(e) => handleInputChange("cpf", e.target.value)} placeholder="000.000.000-00" maxLength={14} className="bg-muted/50" />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="telefone">Telefone</Label>
+          <Label htmlFor="telefone">Telefone (Responsável)</Label>
           <Input id="telefone" value={formData.telefone} onChange={(e) => handleInputChange("telefone", e.target.value)} placeholder="(00) 00000-0000" maxLength={15} className="bg-muted/50" />
         </div>
       </div>
@@ -270,6 +319,40 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
           </Select>
         </div>
       </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="metodoPagamento">Método de Pagamento *</Label>
+          <Select value={formData.metodoPagamento} onValueChange={(value) => handleInputChange("metodoPagamento", value)}>
+            <SelectTrigger className="bg-muted/50"><SelectValue placeholder="Selecione o método" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nao-informado">Não Informado</SelectItem>
+              <SelectItem value="pix">PIX</SelectItem>
+              <SelectItem value="cartao">Cartão</SelectItem>
+              <SelectItem value="dinheiro">Dinheiro</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="statusPagamento">Status do Pagamento *</Label>
+          <Select value={formData.statusPagamento} onValueChange={(value) => handleInputChange("statusPagamento", value)}>
+            <SelectTrigger className="bg-muted/50"><SelectValue placeholder="Selecione o status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pago">Pago</SelectItem>
+              <SelectItem value="pendente">Pendente</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="observacao">Observação</Label>
+        <Textarea
+          id="observacao"
+          value={formData.observacao}
+          onChange={(e) => handleInputChange("observacao", e.target.value)}
+          placeholder="Adicione informações relevantes aqui..."
+          className="bg-muted/50"
+        />
+      </div>
       <div className="flex gap-4 pt-4">
         <Button type="button" variant="outline" onClick={onCancel} className="flex-1">Cancelar</Button>
         <Button type="submit" className="flex-1 bg-gradient-primary hover:shadow-glow transition-all duration-300" disabled={loading}>
@@ -280,16 +363,13 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
     </form>
   );
 
-  // Se o componente estiver em modo de edição, renderiza o formulário dentro de um Dialog (modal)
   if (guest) {
     return (
       <Dialog open={true} onOpenChange={onCancel}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          {/* O Dialog já tem seu próprio título e botão de fechar (X) no canto */}
           <DialogHeader>
             <DialogTitle>Editar Hóspede</DialogTitle>
           </DialogHeader>
-          {/* Renderiza o conteúdo do formulário (sem o Card extra) com um padding */}
           <div className="p-0 sm:p-6">
             {formContent}
           </div>
@@ -298,7 +378,6 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
     );
   }
 
-  // Se estiver em modo de cadastro, renderiza o formulário completo dentro de um Card
   return (
     <Card className="shadow-card">
       <CardHeader className="bg-gradient-primary rounded-t-lg">
@@ -307,7 +386,6 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
             <UserPlus className="h-5 w-5" />
             Cadastro de Hóspade
           </div>
-          {/* O botão 'X' do card só é necessário no modo de cadastro */}
           <Button variant="ghost" size="sm" onClick={onCancel} className="text-white hover:bg-white/20">
             <X className="h-4 w-4" />
           </Button>
@@ -319,3 +397,4 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
     </Card>
   );
 }
+
