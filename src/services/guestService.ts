@@ -1,3 +1,4 @@
+
 import { 
   collection, 
   addDoc, 
@@ -30,6 +31,7 @@ export interface Guest {
 const COLLECTION_NAME = 'guests';
 
 export const guestService = {
+  // ➕ Adicionar hóspede
   async addGuest(guest: Omit<Guest, 'id' | 'createdAt'>) {
     const docRef = await addDoc(collection(db, COLLECTION_NAME), {
       ...guest,
@@ -38,6 +40,7 @@ export const guestService = {
     return docRef.id;
   },
 
+  // 📄 Listar hóspedes
   async getGuests(): Promise<Guest[]> {
     const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
@@ -47,16 +50,23 @@ export const guestService = {
     } as Guest));
   },
 
+  // ✏️ Atualizar hóspede
   async updateGuest(id: string, updates: Partial<Guest>) {
     const docRef = doc(db, COLLECTION_NAME, id);
-    await updateDoc(docRef, updates);
+
+    // Não deixar sobrescrever createdAt
+    const { createdAt, id: _, ...safeUpdates } = updates;
+
+    await updateDoc(docRef, safeUpdates);
   },
 
+  // ❌ Remover hóspede
   async deleteGuest(id: string) {
     const docRef = doc(db, COLLECTION_NAME, id);
     await deleteDoc(docRef);
   },
 
+  // 🔍 Verificar CPF duplicado (em andamento)
   async checkCpfExists(cpf: string, excludeId?: string): Promise<boolean> {
     const q = query(
       collection(db, COLLECTION_NAME), 
@@ -72,6 +82,7 @@ export const guestService = {
     return !querySnapshot.empty;
   },
 
+  // 🛏️ Verificar disponibilidade de quarto/leito
   async checkRoomAvailability(
     leito: string, 
     dataEntrada: string, 
@@ -105,6 +116,7 @@ export const guestService = {
     return conflictingGuests.length === 0;
   },
 
+  // 📆 Buscar hóspedes por intervalo de datas
   async getGuestsByDateRange(dataEntrada: string, dataSaida: string): Promise<Guest[]> {
     const q = query(
       collection(db, COLLECTION_NAME),

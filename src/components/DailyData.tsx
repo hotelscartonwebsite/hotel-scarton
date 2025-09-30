@@ -64,7 +64,7 @@ import {
 export interface Guest {
   id?: string;
   leito: string;
-  status: 'em-andamento' | 'finalizado' | 'reservado' | string;
+  status: 'em-andamento' | 'finalizado';
   nome: string;
   cpf: string;
   telefone: string;
@@ -95,6 +95,23 @@ const parseDateAsLocal = (dateString: string) => {
  */
 const formatDateToISO = (date: Date) => {
   return format(date, 'yyyy-MM-dd');
+};
+
+const maskCPF = (value: string) => {
+  return value
+    .replace(/\D/g, "")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})/, "$1-$2")
+    .replace(/(-\d{2})\d+?$/, "$1");
+};
+
+const maskPhone = (value: string) => {
+  return value
+    .replace(/\D/g, "")
+    .replace(/(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d)/, "$1-$2")
+    .replace(/(-\d{4})\d+?$/, "$1");
 };
 
 
@@ -453,10 +470,29 @@ export function DailyData({ guests: initialGuests }: { guests: Guest[] }) {
     setSelectedDate(prevDate => addDays(prevDate, direction === 'next' ? 1 : -1));
   }, []);
 
-  const handleSaveEdit = useCallback((updatedGuest: Guest) => {
-    setGuests(prev => prev.map(g => (g.id === updatedGuest.id ? updatedGuest : g)));
-    setEditingGuest(null);
-  }, []);
+  // Substitua o handleSaveEdit atual por este:
+
+const handleSaveEdit = useCallback(
+  async (updatedGuest: Guest) => {
+    try {
+      // 🚀 Atualiza no banco
+      await guestService.updateGuest(updatedGuest.id!, updatedGuest);
+
+      // ✅ Atualiza no estado local
+      setGuests((prev) =>
+        prev.map((g) => (g.id === updatedGuest.id ? updatedGuest : g))
+      );
+
+      setEditingGuest(null);
+      console.log(`Hóspede ${updatedGuest.nome} atualizado com sucesso!`);
+    } catch (error) {
+      console.error("Erro ao atualizar hóspede:", error);
+      alert("Erro ao salvar edição. Tente novamente.");
+    }
+  },
+  []
+);
+
 
   // DailyData.tsx
 
@@ -714,13 +750,31 @@ export function DailyData({ guests: initialGuests }: { guests: Guest[] }) {
 
                 <div>
                   <Label>CPF</Label>
-                  <Input name="cpf" defaultValue={editingGuest.cpf} required />
+                  <Input
+                    name="cpf"
+                    value={editingGuest.cpf}
+                    onChange={(e) =>
+                      setEditingGuest((prev) =>
+                        prev ? { ...prev, cpf: maskCPF(e.target.value) } : prev
+                      )
+                    }
+                    required
+                  />
                 </div>
 
                 <div>
                   <Label>Telefone</Label>
-                  <Input name="telefone" defaultValue={editingGuest.telefone} />
+                  <Input
+                    name="telefone"
+                    value={editingGuest.telefone}
+                    onChange={(e) =>
+                      setEditingGuest((prev) =>
+                        prev ? { ...prev, telefone: maskPhone(e.target.value) } : prev
+                      )
+                    }
+                  />
                 </div>
+
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
