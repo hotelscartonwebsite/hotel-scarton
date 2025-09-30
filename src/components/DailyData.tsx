@@ -101,44 +101,79 @@ const formatDateToISO = (date: Date) => {
 /** ---------------------------
  * Componentes memoizados para unidades
  * ----------------------------*/
+// --- DEFINIÇÃO DE TIPOS PARA O UnitCard (MAIS ORGANIZADO) ---
+type UnitCardProps = {
+    unitNumber: string;
+    type: 'room' | 'apartment';
+    isOccupied: boolean;
+    isCheckout: boolean;
+    isTurnaround?: boolean; // NOVO
+    guest?: Guest;
+    guestIn?: Guest;       // NOVO
+    guestOut?: Guest;      // NOVO
+};
 
-const UnitCard = memo(({ unitNumber, type, isOccupied, isCheckout, guest }: {
-  unitNumber: string;
-  type: 'room' | 'apartment';
-  isOccupied: boolean;
-  isCheckout: boolean;
-  guest?: Guest;
-}) => {
-  const unitClasses = cn(
-    "flex flex-col items-center justify-center rounded-lg border transition-all duration-200 cursor-pointer",
-    "h-14 w-14 sm:h-16 sm:w-16 p-2",
-    isCheckout
-      ? "bg-yellow-500 text-yellow-900 shadow-md border-yellow-500/50"
-      : isOccupied
-        ? "bg-destructive text-destructive-foreground shadow-md border-destructive/50"
-        : "bg-green-500/10 text-green-700 border-green-500/30"
-  );
+const UnitCard = memo(({
+    unitNumber,
+    type,
+    isOccupied,
+    isCheckout,
+    isTurnaround,
+    guest,
+    guestIn,
+    guestOut
+}: UnitCardProps) => {
 
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className={unitClasses}>
-          <span className="font-bold text-base sm:text-lg">{unitNumber}</span>
-          {(isOccupied || isCheckout) && <User className="h-4 w-4 mt-1 opacity-80" />}
-        </div>
-      </TooltipTrigger>
-      <TooltipContent>
-        {(isOccupied || isCheckout) && guest ? (
-          <div className="text-sm">
-            <p className="font-bold">{guest.nome}</p>
-            <p>{isCheckout ? "Checkout hoje" : `${type === 'room' ? 'Quarto' : 'Apartamento'} ${unitNumber}`}</p>
-          </div>
-        ) : (
-          <p>{type === 'room' ? 'Quarto' : 'Apartamento'} {unitNumber} - Disponível</p>
-        )}
-      </TooltipContent>
-    </Tooltip>
-  );
+    // ✅ LÓGICA DE ESTILOS CORRIGIDA
+    const unitClasses = cn(
+        "flex flex-col items-center justify-center rounded-lg border transition-all duration-200 cursor-pointer shadow-md",
+        "h-14 w-14 sm:h-16 sm:w-16 p-2",
+        // Classes de cor são aplicadas condicionalmente, exceto para 'turnaround'
+        !isTurnaround && (
+            isCheckout
+                ? "bg-yellow-500 text-yellow-900 border-yellow-500/50"
+                : isOccupied
+                    ? "bg-destructive text-destructive-foreground border-destructive/50"
+                    : "bg-green-500/10 text-green-700 border-green-500/30 shadow-none"
+        )
+    );
+    
+    // ✅ CONSTANTE ADICIONADA: Estilo inline para o gradiente diagonal
+    const unitStyle = isTurnaround ? {
+        // Amarelo (#eab308) para checkout, Vermelho (#ef4444) para ocupado/check-in
+        background: 'linear-gradient(to top right, #eab308 49.5%, #ef4444 50.5%)',
+        color: 'white', 
+        borderColor: '#ef4444'
+    } : {};
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                {/* ✅ Atributo 'style' adicionado ao div */}
+                <div className={unitClasses} style={unitStyle}>
+                    <span className="font-bold text-base sm:text-lg">{unitNumber}</span>
+                    {/* ✅ Condição do ícone corrigida para incluir 'turnaround' */}
+                    {(isOccupied || isCheckout || isTurnaround) && <User className="h-4 w-4 mt-1 opacity-80" />}
+                </div>
+            </TooltipTrigger>
+            <TooltipContent>
+                {/* ✅ LÓGICA DO TOOLTIP CORRIGIDA para o caso 'turnaround' */}
+                {isTurnaround ? (
+                    <div className="text-sm">
+                        <p>Sai: <span className="font-bold">{guestOut?.nome}</span></p>
+                        <p>Entra: <span className="font-bold">{guestIn?.nome}</span></p>
+                    </div>
+                ) : (isOccupied || isCheckout) && guest ? (
+                    <div className="text-sm">
+                        <p className="font-bold">{guest.nome}</p>
+                        <p>{isCheckout ? "Checkout hoje" : `${type === 'room' ? 'Quarto' : 'Apartamento'} ${unitNumber}`}</p>
+                    </div>
+                ) : (
+                    <p>{type === 'room' ? 'Quarto' : 'Apartamento'} {unitNumber} - Disponível</p>
+                )}
+            </TooltipContent>
+        </Tooltip>
+    );
 });
 
 UnitCard.displayName = 'UnitCard';
@@ -197,25 +232,40 @@ export function DailyData({ guests: initialGuests }: { guests: Guest[] }) {
    * Isso é extremamente rápido e não causa travamentos.
    */
   // CÓDIGO CORRETO ✅
-  const { active: activeGuests, checkout: checkoutGuests } = useMemo(() => {
+  // CÓDIGO CORRETO ✅
+const { active: activeGuests, checkout: checkoutGuests } = useMemo(() => {
     const dateKey = formatDateToISO(selectedDate);
     return dailyGuestMap.get(dateKey) || { active: [], checkout: [] };
-  }, [selectedDate, dailyGuestMap]);
+}, [selectedDate, dailyGuestMap]);
+
+// NOVO: Filtra os hóspedes que estão fazendo check-in na data selecionada
+const checkinGuests = useMemo(() => {
+    const dateKey = formatDateToISO(selectedDate);
+    // Um hóspede está fazendo check-in se ele estiver ativo no dia E a data de entrada for hoje
+    return activeGuests.filter(g => g.dataEntrada === dateKey);
+}, [activeGuests, selectedDate]);
 
 
-  // Mapa rápido leito -> guest (somente ativos na data selecionada)
-  const occupiedUnitsMap = useMemo(() => {
+// Mapa rápido leito -> guest (somente ativos na data selecionada)
+const occupiedUnitsMap = useMemo(() => {
     const map = new Map<string, Guest>();
     activeGuests.forEach(g => map.set(g.leito, g));
     return map;
-  }, [activeGuests]);
+}, [activeGuests]);
 
-  // Mapa para checkouts
-  const checkoutUnitsMap = useMemo(() => {
+// Mapa para checkouts
+const checkoutUnitsMap = useMemo(() => {
     const map = new Map<string, Guest>();
     checkoutGuests.forEach(g => map.set(g.leito, g));
     return map;
-  }, [checkoutGuests]);
+}, [checkoutGuests]);
+
+// NOVO: Mapa para check-ins
+const checkinUnitsMap = useMemo(() => {
+    const map = new Map<string, Guest>();
+    checkinGuests.forEach(g => map.set(g.leito, g));
+    return map;
+}, [checkinGuests]);
 
   // Quais unidades mostrar conforme filtro
   const displayedUnits = useMemo(() => {
@@ -358,76 +408,109 @@ export function DailyData({ guests: initialGuests }: { guests: Guest[] }) {
           </CardContent>
         </Card>
         {/* Mapa de Ocupação */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Mapa de Ocupação - {format(selectedDate, "dd/MM/yyyy")}</CardTitle>
-            <CardDescription>Visualização da ocupação das unidades para a data selecionada.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {displayedUnits.rooms.length > 0 && (
-              <div>
+<Card>
+    <CardHeader>
+        <CardTitle>Mapa de Ocupação - {format(selectedDate, "dd/MM/yyyy")}</CardTitle>
+        <CardDescription>Visualização da ocupação das unidades para a data selecionada.</CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-6">
+        {displayedUnits.rooms.length > 0 && (
+            <div>
                 <div className="flex items-center gap-2 mb-4">
-                  <BedDouble className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold text-lg">Quartos</h3>
+                    <BedDouble className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold text-lg">Quartos</h3>
                 </div>
                 <div className="grid grid-cols-5 sm:grid-cols-7 lg:grid-cols-10 gap-2 sm:gap-4">
-                  {displayedUnits.rooms.map(number => {
-                    const guest = occupiedUnitsMap.get(number) || checkoutUnitsMap.get(number);
-                    return (
-                      <UnitCard
-                        key={number}
-                        unitNumber={number}
-                        type="room"
-                        isOccupied={occupiedUnitsMap.has(number)}
-                        isCheckout={checkoutUnitsMap.has(number)}
-                        guest={guest}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                    {displayedUnits.rooms.map(number => {
+                        // Lógica para determinar o estado da unidade
+                        const isTurnaround = checkinUnitsMap.has(number) && checkoutUnitsMap.has(number);
+                        const isCheckoutOnly = checkoutUnitsMap.has(number) && !isTurnaround;
+                        const isOccupied = occupiedUnitsMap.has(number) || (checkinUnitsMap.has(number) && !isTurnaround);
 
-            {displayedUnits.apartments.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Building className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold text-lg">Apartamentos</h3>
-                </div>
-                <div className="grid grid-cols-5 sm:grid-cols-7 lg:grid-cols-10 gap-2 sm:gap-4">
-                  {displayedUnits.apartments.map(number => {
-                    const guest = occupiedUnitsMap.get(number) || checkoutUnitsMap.get(number);
-                    return (
-                      <UnitCard
-                        key={number}
-                        unitNumber={number}
-                        type="apartment"
-                        isOccupied={occupiedUnitsMap.has(number)}
-                        isCheckout={checkoutUnitsMap.has(number)}
-                        guest={guest}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                        // Obtém os dados dos hóspedes para o Tooltip/Detalhes
+                        const guestIn = checkinUnitsMap.get(number);
+                        const guestOut = checkoutUnitsMap.get(number);
+                        const guest = guestIn || occupiedUnitsMap.get(number) || guestOut;
 
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-6 border-t">
-              <div className="flex items-center gap-2 text-sm">
-                <div className="h-4 w-4 rounded-full bg-green-500/10 border border-green-500/30" />
-                <span>Disponível</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <div className="h-4 w-4 rounded-full bg-destructive" />
-                <span>Ocupado</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <div className="h-4 w-4 rounded-full bg-yellow-500" />
-                <span>Checkout Hoje</span>
-              </div>
+                        return (
+                            <UnitCard
+                                key={number}
+                                unitNumber={number}
+                                type="room"
+                                isOccupied={isOccupied}
+                                isCheckout={isCheckoutOnly}
+                                isTurnaround={isTurnaround} // Nova prop para o estado de troca
+                                guest={guest}
+                                guestIn={guestIn}     // Passando hóspede que entra
+                                guestOut={guestOut}   // Passando hóspede que sai
+                            />
+                        );
+                    })}
+                </div>
             </div>
-          </CardContent>
-        </Card>
+        )}
+
+        {displayedUnits.apartments.length > 0 && (
+            <div>
+                <div className="flex items-center gap-2 mb-4">
+                    <Building className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold text-lg">Apartamentos</h3>
+                </div>
+                <div className="grid grid-cols-5 sm:grid-cols-7 lg:grid-cols-10 gap-2 sm:gap-4">
+                    {displayedUnits.apartments.map(number => {
+                        // Lógica para determinar o estado da unidade
+                        const isTurnaround = checkinUnitsMap.has(number) && checkoutUnitsMap.has(number);
+                        const isCheckoutOnly = checkoutUnitsMap.has(number) && !isTurnaround;
+                        const isOccupied = occupiedUnitsMap.has(number) || (checkinUnitsMap.has(number) && !isTurnaround);
+
+                        // Obtém os dados dos hóspedes para o Tooltip/Detalhes
+                        const guestIn = checkinUnitsMap.get(number);
+                        const guestOut = checkoutUnitsMap.get(number);
+                        const guest = guestIn || occupiedUnitsMap.get(number) || guestOut;
+                        
+                        return (
+                            <UnitCard
+                                key={number}
+                                unitNumber={number}
+                                type="apartment"
+                                isOccupied={isOccupied}
+                                isCheckout={isCheckoutOnly}
+                                isTurnaround={isTurnaround} // Nova prop para o estado de troca
+                                guest={guest}
+                                guestIn={guestIn}     // Passando hóspede que entra
+                                guestOut={guestOut}   // Passando hóspede que sai
+                            />
+                        );
+                    })}
+                </div>
+            </div>
+        )}
+
+        {/* Legenda Atualizada */}
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-6 border-t">
+            <div className="flex items-center gap-2 text-sm">
+                <div className="h-4 w-4 rounded-full bg-muted/50 border" />
+                <span>Disponível</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+                <div className="h-4 w-4 rounded-full bg-primary" />
+                <span>Ocupado</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+                <div className="h-4 w-4 rounded-full bg-yellow-500" />
+                <span>Checkout</span>
+            </div>
+            {/* Nova legenda para a troca de hóspedes */}
+            <div className="flex items-center gap-2 text-sm">
+                 <div 
+                    className="h-4 w-4 rounded-full"
+                    style={{ background: 'linear-gradient(to top right, #eab308 49.5%, #3b82f6 50.5%)' }}
+                />
+                <span>Troca de Hóspede</span>
+            </div>
+        </div>
+    </CardContent>
+</Card>
 
         {/* Lista Detalhada */}
         <Card>
