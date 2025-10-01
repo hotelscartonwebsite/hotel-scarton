@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'; // Adicionado useState
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 // NOVOS IMPORTS para o painel de informações
 import {
   Sheet,
@@ -19,9 +20,10 @@ const APARTMENT_NUMBERS = ['09', '11', '12', '13', '14', '15', '17', '18', '19',
 
 interface OccupancyMapProps {
   guests: Guest[];
+  onLiberarCheckout?: (guestId: string) => void;
 }
 
-export function OccupancyMap({ guests }: OccupancyMapProps) {
+export function OccupancyMap({ guests, onLiberarCheckout }: OccupancyMapProps) {
   // NOVO ESTADO: Armazena o hóspede selecionado para exibir no painel (Sheet)
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
 
@@ -31,6 +33,11 @@ export function OccupancyMap({ guests }: OccupancyMapProps) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayTime = today.getTime();
+
+    // Obter hora atual no horário de Brasília
+    const nowInBrasilia = new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
+    const currentHourBrasilia = new Date(nowInBrasilia).getHours();
+    const isAfterCheckoutTime = currentHourBrasilia >= 11;
 
     const occupiedMap = new Map<string, Guest>();
     const checkoutMap = new Map<string, Guest>();
@@ -45,7 +52,8 @@ export function OccupancyMap({ guests }: OccupancyMapProps) {
       const checkOutTime = checkOutDate.getTime();
 
       // LÓGICA ALTERADA para categorizar os hóspedes
-      if (checkOutTime === todayTime) {
+      // Se é dia de checkout mas já passou das 11h OU foi liberado manualmente, não adiciona ao checkoutMap
+      if (checkOutTime === todayTime && !isAfterCheckoutTime && !guest.checkoutLiberado) {
         checkoutMap.set(guest.leito, guest);
       }
       // Adicionamos a verificação de check-in também
@@ -53,7 +61,8 @@ export function OccupancyMap({ guests }: OccupancyMapProps) {
         checkinMap.set(guest.leito, guest);
       }
       // Ocupação normal (não está saindo nem entrando hoje)
-      if (todayTime > checkInTime && todayTime < checkOutTime) {
+      // Após 11h ou se foi liberado manualmente, hóspedes de checkout não são mais considerados ocupados
+      if (todayTime > checkInTime && todayTime < checkOutTime && !(checkOutTime === todayTime && (isAfterCheckoutTime || guest.checkoutLiberado))) {
         occupiedMap.set(guest.leito, guest);
       }
     });
@@ -202,7 +211,7 @@ export function OccupancyMap({ guests }: OccupancyMapProps) {
                   CPF: {selectedGuest.cpf}
                 </SheetDescription>
               </SheetHeader>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm mb-6">
                 <div className="flex items-center gap-3">
                   <Phone className="h-5 w-5 text-primary" />
                   <div>
@@ -235,6 +244,23 @@ export function OccupancyMap({ guests }: OccupancyMapProps) {
                   </div>
                 </div>
               </div>
+              
+              {/* Botão para liberar checkout se for checkout hoje */}
+              {checkoutUnitsMap.has(selectedGuest.leito) && onLiberarCheckout && (
+                <div className="pt-4 border-t">
+                  <Button 
+                    onClick={() => {
+                      if (confirm(`Deseja liberar o ${ROOM_NUMBERS.includes(selectedGuest.leito) ? 'quarto' : 'apartamento'} ${selectedGuest.leito} como disponível?`)) {
+                        onLiberarCheckout(selectedGuest.id!);
+                        setSelectedGuest(null);
+                      }
+                    }}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                  >
+                    Liberar como Disponível
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </SheetContent>

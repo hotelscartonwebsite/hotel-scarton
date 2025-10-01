@@ -15,4 +15,5 @@ export interface Guest {
   metodoPagamento: 'nao-informado' | 'pix' | 'cartao' | 'dinheiro' | '';
   statusPagamento: 'pago' | 'pendente' | '';
   observacao: string;
+  checkoutLiberado?: boolean;
 }

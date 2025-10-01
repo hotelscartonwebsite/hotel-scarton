@@ -385,16 +385,51 @@ export function DailyData({ guests: initialGuests }: { guests: Guest[] }) {
   // Mapa rápido leito -> guest (somente ativos na data selecionada)
   const occupiedUnitsMap = useMemo(() => {
     const map = new Map<string, Guest>();
-    activeGuests.forEach(g => map.set(g.leito, g));
+    
+    // Verificar se é hoje e se já passou das 11h (horário de Brasília)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDateNormalized = new Date(selectedDate);
+    selectedDateNormalized.setHours(0, 0, 0, 0);
+    const isToday = selectedDateNormalized.getTime() === today.getTime();
+    
+    const nowInBrasilia = new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
+    const currentHourBrasilia = new Date(nowInBrasilia).getHours();
+    const isAfterCheckoutTime = currentHourBrasilia >= 11;
+    
+    activeGuests.forEach(g => {
+      // Se é hoje e já passou das 11h, não adiciona hóspedes que estão saindo hoje
+      if (isToday && isAfterCheckoutTime && checkoutGuests.some(co => co.leito === g.leito)) {
+        return;
+      }
+      map.set(g.leito, g);
+    });
     return map;
-  }, [activeGuests]);
+  }, [activeGuests, checkoutGuests, selectedDate]);
 
   // Mapa para checkouts
   const checkoutUnitsMap = useMemo(() => {
     const map = new Map<string, Guest>();
+    
+    // Verificar se é hoje e se já passou das 11h (horário de Brasília)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDateNormalized = new Date(selectedDate);
+    selectedDateNormalized.setHours(0, 0, 0, 0);
+    const isToday = selectedDateNormalized.getTime() === today.getTime();
+    
+    const nowInBrasilia = new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
+    const currentHourBrasilia = new Date(nowInBrasilia).getHours();
+    const isAfterCheckoutTime = currentHourBrasilia >= 11;
+    
+    // Se é hoje e já passou das 11h, não adiciona checkouts
+    if (isToday && isAfterCheckoutTime) {
+      return map;
+    }
+    
     checkoutGuests.forEach(g => map.set(g.leito, g));
     return map;
-  }, [checkoutGuests]);
+  }, [checkoutGuests, selectedDate]);
 
   // NOVO: Mapa para check-ins
   const checkinUnitsMap = useMemo(() => {

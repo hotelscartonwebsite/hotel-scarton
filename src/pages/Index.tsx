@@ -103,6 +103,17 @@ export default function Index() {
     }
   };
 
+  // Libera checkout manualmente
+  const handleLiberarCheckout = async (guestId: string) => {
+    try {
+      await guestService.updateGuest(guestId, { checkoutLiberado: true });
+      await loadGuests();
+      toast.success('Quarto liberado como disponível!');
+    } catch (error) {
+      toast.error('Erro ao liberar quarto');
+    }
+  };
+
   // --- RENDERIZAÇÃO DO COMPONENTE ---
   return (
     <div className="min-h-screen bg-background">
@@ -166,7 +177,7 @@ export default function Index() {
             ) : (
               <div className="space-y-8">
                 <DashboardCards guests={guests} />
-                <OccupancyMap guests={guests} />
+                <OccupancyMap guests={guests} onLiberarCheckout={handleLiberarCheckout} />
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-8">
                   <MonthlyCheckInsChart guests={guests} />
                   <AccommodationPieChart guests={guests} />
