@@ -1,8 +1,8 @@
 // DailyData.tsx
 
-import React from 'react';
-import { useState, useMemo, useCallback, memo } from 'react';
+import React, { useState, useMemo, useCallback, memo, lazy, Suspense } from 'react';
 import { guestService } from '@/services/guestService';
+import OptimizedUnitGrid from './OptimizedUnitGrid';
 
 import {
   Card,
@@ -141,11 +141,9 @@ const UnitCard = memo(({
   guestOut
 }: UnitCardProps) => {
 
-  // ✅ LÓGICA DE ESTILOS CORRIGIDA
   const unitClasses = cn(
     "flex flex-col items-center justify-center rounded-lg border transition-all duration-200 cursor-pointer shadow-md",
     "h-14 w-14 sm:h-16 sm:w-16 p-2",
-    // Classes de cor são aplicadas condicionalmente, exceto para 'turnaround'
     !isTurnaround && (
       isCheckout
         ? "bg-yellow-500 text-yellow-900 border-yellow-500/50"
@@ -155,9 +153,7 @@ const UnitCard = memo(({
     )
   );
 
-  // ✅ CONSTANTE ADICIONADA: Estilo inline para o gradiente diagonal
   const unitStyle = isTurnaround ? {
-    // Amarelo (#eab308) para checkout, Vermelho (#ef4444) para ocupado/check-in
     background: 'linear-gradient(to top right, #eab308 49.5%, #ef4444 50.5%)',
     color: 'white',
     borderColor: '#ef4444'
@@ -166,15 +162,12 @@ const UnitCard = memo(({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        {/* ✅ Atributo 'style' adicionado ao div */}
         <div className={unitClasses} style={unitStyle}>
           <span className="font-bold text-base sm:text-lg">{unitNumber}</span>
-          {/* ✅ Condição do ícone corrigida para incluir 'turnaround' */}
           {(isOccupied || isCheckout || isTurnaround) && <User className="h-4 w-4 mt-1 opacity-80" />}
         </div>
       </TooltipTrigger>
       <TooltipContent>
-        {/* ✅ LÓGICA DO TOOLTIP CORRIGIDA para o caso 'turnaround' */}
         {isTurnaround ? (
           <div className="text-sm">
             <p>Sai: <span className="font-bold">{guestOut?.nome}</span></p>
@@ -191,8 +184,13 @@ const UnitCard = memo(({
       </TooltipContent>
     </Tooltip>
   );
+}, (prev, next) => {
+  return prev.unitNumber === next.unitNumber &&
+    prev.isOccupied === next.isOccupied &&
+    prev.isCheckout === next.isCheckout &&
+    prev.isTurnaround === next.isTurnaround &&
+    prev.guest?.id === next.guest?.id;
 });
-// NOVO COMPONENTE PARA O CARD DETALHADO
 const DetailedUnitCard = memo(({
   unit,
   onEdit,
@@ -202,7 +200,6 @@ const DetailedUnitCard = memo(({
   onEdit: (guest: Guest) => void;
   onDelete: (guestId: string, guestName: string) => void;
 }) => {
-  // Estado para controlar qual hóspede exibir em caso de 'turnaround'
   const [visibleGuestType, setVisibleGuestType] = useState<'in' | 'out'>('in');
 
   const guestToDisplay = unit.isTurnaround
@@ -310,6 +307,12 @@ const DetailedUnitCard = memo(({
       )}
     </Card>
   );
+}, (prev, next) => {
+  return prev.unit.number === next.unit.number &&
+    prev.unit.isOccupied === next.unit.isOccupied &&
+    prev.unit.isCheckout === next.unit.isCheckout &&
+    prev.unit.isTurnaround === next.unit.isTurnaround &&
+    prev.unit.guest?.id === next.unit.guest?.id;
 });
 DetailedUnitCard.displayName = "DetailedUnitCard";
 UnitCard.displayName = 'UnitCard';
@@ -624,75 +627,93 @@ const handleSaveEdit = useCallback(
           </CardHeader>
           <CardContent className="space-y-6">
             {displayedUnits.rooms.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <BedDouble className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold text-lg">Quartos</h3>
-                </div>
-                <div className="grid grid-cols-5 sm:grid-cols-7 lg:grid-cols-10 gap-2 sm:gap-4">
-                  {displayedUnits.rooms.map(number => {
-                    // Lógica para determinar o estado da unidade
-                    const isTurnaround = checkinUnitsMap.has(number) && checkoutUnitsMap.has(number);
-                    const isCheckoutOnly = checkoutUnitsMap.has(number) && !isTurnaround;
-                    const isOccupied = occupiedUnitsMap.has(number) || (checkinUnitsMap.has(number) && !isTurnaround);
+              <OptimizedUnitGrid
+                title="Quartos"
+                icon={<BedDouble className="h-5 w-5 text-primary" />}
+                units={displayedUnits.rooms.map(number => {
+                  const isTurnaround = checkinUnitsMap.has(number) && checkoutUnitsMap.has(number);
+                  const isCheckoutOnly = checkoutUnitsMap.has(number) && !isTurnaround;
+                  const isOccupied = occupiedUnitsMap.has(number) || (checkinUnitsMap.has(number) && !isTurnaround);
+                  const guestIn = checkinUnitsMap.get(number);
+                  const guestOut = checkoutUnitsMap.get(number);
+                  const guest = guestIn || occupiedUnitsMap.get(number) || guestOut;
 
-                    // Obtém os dados dos hóspedes para o Tooltip/Detalhes
-                    const guestIn = checkinUnitsMap.get(number);
-                    const guestOut = checkoutUnitsMap.get(number);
-                    const guest = guestIn || occupiedUnitsMap.get(number) || guestOut;
+                  return {
+                    number,
+                    type: 'room' as const,
+                    guest,
+                    isOccupied,
+                    isCheckout: isCheckoutOnly
+                  };
+                })}
+                renderUnit={(number) => {
+                  const isTurnaround = checkinUnitsMap.has(number) && checkoutUnitsMap.has(number);
+                  const isCheckoutOnly = checkoutUnitsMap.has(number) && !isTurnaround;
+                  const isOccupied = occupiedUnitsMap.has(number) || (checkinUnitsMap.has(number) && !isTurnaround);
+                  const guestIn = checkinUnitsMap.get(number);
+                  const guestOut = checkoutUnitsMap.get(number);
+                  const guest = guestIn || occupiedUnitsMap.get(number) || guestOut;
 
-                    return (
-                      <UnitCard
-                        key={number}
-                        unitNumber={number}
-                        type="room"
-                        isOccupied={isOccupied}
-                        isCheckout={isCheckoutOnly}
-                        isTurnaround={isTurnaround} // Nova prop para o estado de troca
-                        guest={guest}
-                        guestIn={guestIn}     // Passando hóspede que entra
-                        guestOut={guestOut}   // Passando hóspede que sai
-                      />
-                    );
-                  })}
-                </div>
-              </div>
+                  return (
+                    <UnitCard
+                      key={number}
+                      unitNumber={number}
+                      type="room"
+                      isOccupied={isOccupied}
+                      isCheckout={isCheckoutOnly}
+                      isTurnaround={isTurnaround}
+                      guest={guest}
+                      guestIn={guestIn}
+                      guestOut={guestOut}
+                    />
+                  );
+                }}
+              />
             )}
 
             {displayedUnits.apartments.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Building className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold text-lg">Apartamentos</h3>
-                </div>
-                <div className="grid grid-cols-5 sm:grid-cols-7 lg:grid-cols-10 gap-2 sm:gap-4">
-                  {displayedUnits.apartments.map(number => {
-                    // Lógica para determinar o estado da unidade
-                    const isTurnaround = checkinUnitsMap.has(number) && checkoutUnitsMap.has(number);
-                    const isCheckoutOnly = checkoutUnitsMap.has(number) && !isTurnaround;
-                    const isOccupied = occupiedUnitsMap.has(number) || (checkinUnitsMap.has(number) && !isTurnaround);
+              <OptimizedUnitGrid
+                title="Apartamentos"
+                icon={<Building className="h-5 w-5 text-primary" />}
+                units={displayedUnits.apartments.map(number => {
+                  const isTurnaround = checkinUnitsMap.has(number) && checkoutUnitsMap.has(number);
+                  const isCheckoutOnly = checkoutUnitsMap.has(number) && !isTurnaround;
+                  const isOccupied = occupiedUnitsMap.has(number) || (checkinUnitsMap.has(number) && !isTurnaround);
+                  const guestIn = checkinUnitsMap.get(number);
+                  const guestOut = checkoutUnitsMap.get(number);
+                  const guest = guestIn || occupiedUnitsMap.get(number) || guestOut;
 
-                    // Obtém os dados dos hóspedes para o Tooltip/Detalhes
-                    const guestIn = checkinUnitsMap.get(number);
-                    const guestOut = checkoutUnitsMap.get(number);
-                    const guest = guestIn || occupiedUnitsMap.get(number) || guestOut;
+                  return {
+                    number,
+                    type: 'apartment' as const,
+                    guest,
+                    isOccupied,
+                    isCheckout: isCheckoutOnly
+                  };
+                })}
+                renderUnit={(number) => {
+                  const isTurnaround = checkinUnitsMap.has(number) && checkoutUnitsMap.has(number);
+                  const isCheckoutOnly = checkoutUnitsMap.has(number) && !isTurnaround;
+                  const isOccupied = occupiedUnitsMap.has(number) || (checkinUnitsMap.has(number) && !isTurnaround);
+                  const guestIn = checkinUnitsMap.get(number);
+                  const guestOut = checkoutUnitsMap.get(number);
+                  const guest = guestIn || occupiedUnitsMap.get(number) || guestOut;
 
-                    return (
-                      <UnitCard
-                        key={number}
-                        unitNumber={number}
-                        type="apartment"
-                        isOccupied={isOccupied}
-                        isCheckout={isCheckoutOnly}
-                        isTurnaround={isTurnaround} // Nova prop para o estado de troca
-                        guest={guest}
-                        guestIn={guestIn}     // Passando hóspede que entra
-                        guestOut={guestOut}   // Passando hóspede que sai
-                      />
-                    );
-                  })}
-                </div>
-              </div>
+                  return (
+                    <UnitCard
+                      key={number}
+                      unitNumber={number}
+                      type="apartment"
+                      isOccupied={isOccupied}
+                      isCheckout={isCheckoutOnly}
+                      isTurnaround={isTurnaround}
+                      guest={guest}
+                      guestIn={guestIn}
+                      guestOut={guestOut}
+                    />
+                  );
+                }}
+              />
             )}
 
             {/* Legenda Atualizada */}
@@ -733,21 +754,23 @@ const handleSaveEdit = useCallback(
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {allUnits.map(unit => (
-                <DetailedUnitCard
-                  key={unit.number}
-                  unit={unit}
-                  onEdit={(guest) => setEditingGuest(guest)}
-                  onDelete={(guestId) => handleDeleteGuest(guestId)}
-                />
-              ))}
-            </div>
-
-            {allUnits.length === 0 && (
+            {allUnits.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>Nenhuma unidade para exibir com os filtros aplicados.</p>
               </div>
+            ) : (
+              <Suspense fallback={<div className="text-center py-8">Carregando...</div>}>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {allUnits.map(unit => (
+                    <DetailedUnitCard
+                      key={unit.number}
+                      unit={unit}
+                      onEdit={(guest) => setEditingGuest(guest)}
+                      onDelete={(guestId) => handleDeleteGuest(guestId)}
+                    />
+                  ))}
+                </div>
+              </Suspense>
             )}
           </CardContent>
         </Card>
