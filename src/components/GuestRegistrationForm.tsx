@@ -103,7 +103,7 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
         telefone: guest.telefone,
         dataEntrada: guest.dataEntrada,
         dataSaida: guest.dataSaida,
-        valor: maskValor(guest.valor.toString().replace('.', '')),
+        valor: maskValor((guest.valor * 100).toString()),
         tipoAcomodacao: guest.tipoAcomodacao,
         tipoCama: guest.tipoCama,
         metodoPagamento: guest.metodoPagamento || 'nao-informado',
