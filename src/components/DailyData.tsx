@@ -3,6 +3,8 @@
 import React, { useState, useMemo, useCallback, memo, lazy, Suspense } from 'react';
 import { guestService } from '@/services/guestService';
 import OptimizedUnitGrid from './OptimizedUnitGrid';
+import { GuestRegistrationForm } from './GuestRegistrationForm';
+import { toast } from 'sonner';
 
 import {
   Card,
@@ -508,28 +510,39 @@ export function DailyData({ guests: initialGuests }: { guests: Guest[] }) {
     setSelectedDate(prevDate => addDays(prevDate, direction === 'next' ? 1 : -1));
   }, []);
 
-  // Substitua o handleSaveEdit atual por este:
+  const handleSaveEdit = useCallback(
+    async (guestData: Omit<Guest, 'id' | 'createdAt'>) => {
+      if (!editingGuest?.id) return;
+      
+      try {
+        await guestService.updateGuest(editingGuest.id, guestData);
+        
+        setGuests((prev) =>
+          prev.map((g) => (g.id === editingGuest.id ? { ...g, ...guestData } : g))
+        );
 
-const handleSaveEdit = useCallback(
-  async (updatedGuest: Guest) => {
-    try {
-      // 🚀 Atualiza no banco
-      await guestService.updateGuest(updatedGuest.id!, updatedGuest);
+        setEditingGuest(null);
+        toast.success(`Hóspede ${guestData.nome} atualizado com sucesso!`);
+      } catch (error) {
+        console.error("Erro ao atualizar hóspede:", error);
+        toast.error("Erro ao salvar edição. Tente novamente.");
+      }
+    },
+    [editingGuest]
+  );
 
-      // ✅ Atualiza no estado local
-      setGuests((prev) =>
-        prev.map((g) => (g.id === updatedGuest.id ? updatedGuest : g))
-      );
+  const handleCheckCpf = async (cpf: string, excludeId?: string) => {
+    return await guestService.checkCpfExists(cpf, excludeId);
+  };
 
-      setEditingGuest(null);
-      console.log(`Hóspede ${updatedGuest.nome} atualizado com sucesso!`);
-    } catch (error) {
-      console.error("Erro ao atualizar hóspede:", error);
-      alert("Erro ao salvar edição. Tente novamente.");
-    }
-  },
-  []
-);
+  const handleCheckRoomAvailability = async (
+    leito: string,
+    dataEntrada: string,
+    dataSaida: string,
+    excludeId?: string
+  ) => {
+    return await guestService.checkRoomAvailability(leito, dataEntrada, dataSaida, excludeId);
+  };
 
 
   // DailyData.tsx
@@ -775,88 +788,15 @@ const handleSaveEdit = useCallback(
           </CardContent>
         </Card>
 
-        {/* Modal de Edição */}
+        {/* Formulário de Edição Completo */}
         {editingGuest && (
-          <Dialog open={!!editingGuest} onOpenChange={(open) => { if (!open) setEditingGuest(null); }}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Editar Hóspede - Unidade {editingGuest.leito}</DialogTitle>
-                <DialogDescription>Altere as informações do hóspede e clique em salvar.</DialogDescription>
-              </DialogHeader>
-
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const form = e.currentTarget as HTMLFormElement;
-                const fd = new FormData(form);
-
-                const updated: Guest = {
-                  ...editingGuest,
-                  nome: (fd.get('nome') as string) || editingGuest.nome,
-                  cpf: (fd.get('cpf') as string) || editingGuest.cpf,
-                  telefone: (fd.get('telefone') as string) || editingGuest.telefone,
-                  dataEntrada: (fd.get('entrada') as string) || editingGuest.dataEntrada,
-                  dataSaida: (fd.get('saida') as string) || editingGuest.dataSaida,
-                  valor: Number(fd.get('valor') ?? editingGuest.valor)
-                };
-
-                handleSaveEdit(updated);
-              }} className="space-y-4">
-                <div>
-                  <Label>Nome</Label>
-                  <Input name="nome" defaultValue={editingGuest.nome} required />
-                </div>
-
-                <div>
-                  <Label>CPF</Label>
-                  <Input
-                    name="cpf"
-                    value={editingGuest.cpf}
-                    onChange={(e) =>
-                      setEditingGuest((prev) =>
-                        prev ? { ...prev, cpf: maskCPF(e.target.value) } : prev
-                      )
-                    }
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label>Telefone</Label>
-                  <Input
-                    name="telefone"
-                    value={editingGuest.telefone}
-                    onChange={(e) =>
-                      setEditingGuest((prev) =>
-                        prev ? { ...prev, telefone: maskPhone(e.target.value) } : prev
-                      )
-                    }
-                  />
-                </div>
-
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Data Entrada</Label>
-                    <Input type="date" name="entrada" defaultValue={editingGuest.dataEntrada} required />
-                  </div>
-                  <div>
-                    <Label>Data Saída</Label>
-                    <Input type="date" name="saida" defaultValue={editingGuest.dataSaida} required />
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Valor (R$)</Label>
-                  <Input type="number" step="0.01" name="valor" defaultValue={String(editingGuest.valor)} />
-                </div>
-
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setEditingGuest(null)}>Cancelar</Button>
-                  <Button type="submit">Salvar</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <GuestRegistrationForm
+            guest={editingGuest as any}
+            onSubmit={handleSaveEdit}
+            onCancel={() => setEditingGuest(null)}
+            onCheckCpf={handleCheckCpf}
+            onCheckRoomAvailability={handleCheckRoomAvailability}
+          />
         )}
       </div>
     </TooltipProvider>

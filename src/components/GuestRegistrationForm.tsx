@@ -52,6 +52,28 @@ const maskPhone = (value: string) => {
     .replace(/(-\d{4})\d+?$/, "$1");
 };
 
+const maskValor = (value: string) => {
+  // Remove tudo que não é dígito
+  const numericValue = value.replace(/\D/g, "");
+  
+  if (!numericValue) return "0,00";
+  
+  // Converte para número e divide por 100 para ter os centavos
+  const number = parseInt(numericValue) / 100;
+  
+  // Formata com vírgula e ponto
+  return number.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+
+const parseValor = (maskedValue: string): number => {
+  // Remove pontos de milhar e substitui vírgula por ponto
+  const numericString = maskedValue.replace(/\./g, "").replace(",", ".");
+  return parseFloat(numericString) || 0;
+};
+
 export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, onCheckRoomAvailability }: GuestRegistrationFormProps) {
   const [formData, setFormData] = useState<GuestFormData>({
     leito: "",
@@ -61,7 +83,7 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
     telefone: "",
     dataEntrada: "",
     dataSaida: "",
-    valor: "",
+    valor: "0,00",
     tipoAcomodacao: "",
     tipoCama: "",
     metodoPagamento: "nao-informado",
@@ -81,7 +103,7 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
         telefone: guest.telefone,
         dataEntrada: guest.dataEntrada,
         dataSaida: guest.dataSaida,
-        valor: guest.valor.toString(),
+        valor: maskValor(guest.valor.toString().replace('.', '')),
         tipoAcomodacao: guest.tipoAcomodacao,
         tipoCama: guest.tipoCama,
         metodoPagamento: guest.metodoPagamento || 'nao-informado',
@@ -97,6 +119,8 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
       finalValue = maskCPF(value);
     } else if (field === 'telefone') {
       finalValue = maskPhone(value);
+    } else if (field === 'valor') {
+      finalValue = maskValor(value);
     }
     setFormData((prev) => ({ ...prev, [field]: finalValue }));
   };
@@ -188,7 +212,7 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
         telefone: formData.telefone,
         dataEntrada: formData.dataEntrada,
         dataSaida: formData.dataSaida,
-        valor: parseFloat(formData.valor),
+        valor: parseValor(formData.valor),
         tipoAcomodacao: formData.tipoAcomodacao as 'quarto' | 'apartamento',
         tipoCama: formData.tipoCama as 'solteiro' | 'casal' | 'casal-e-solteiro',
         status: 'em-andamento' as const,
@@ -202,7 +226,7 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
       if (!guest) {
         setFormData({
           leito: "", cama: "", nomes: [""], cpf: "", telefone: "",
-          dataEntrada: "", dataSaida: "", valor: "", tipoAcomodacao: "", tipoCama: "",
+          dataEntrada: "", dataSaida: "", valor: "0,00", tipoAcomodacao: "", tipoCama: "",
           metodoPagamento: "nao-informado", statusPagamento: "pendente", observacao: "",
         });
       }
@@ -279,7 +303,7 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label htmlFor="valor">Valor da Hospedagem *</Label>
-          <Input id="valor" type="number" step="0.01" min="0" value={formData.valor} onChange={(e) => handleInputChange("valor", e.target.value)} placeholder="0,00" className="bg-muted/50" />
+          <Input id="valor" type="text" value={formData.valor} onChange={(e) => handleInputChange("valor", e.target.value)} placeholder="0,00" className="bg-muted/50" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="tipoAcomodacao">Tipo de Acomodação *</Label>
@@ -381,4 +405,3 @@ export function GuestRegistrationForm({ guest, onSubmit, onCancel, onCheckCpf, o
     </Card>
   );
 }
-
