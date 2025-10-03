@@ -38,8 +38,9 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all");
 
   const sortedGuests = useMemo(() => {
-    return [...guests].sort((a, b) => new Date(a.dataEntrada).getTime() - new Date(b.dataEntrada).getTime());
+    return [...guests].sort((a, b) => Number(a.leito) - Number(b.leito));
   }, [guests]);
+
 
   const filteredGuests = useMemo(() => {
     let filtered = sortedGuests;
@@ -94,7 +95,7 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
       },
       cancel: {
         label: "Cancelar",
-        onClick: () => {},
+        onClick: () => { },
       },
     });
   };
@@ -303,7 +304,7 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
                   <DollarSign className="h-4 w-4 text-primary" />
                   <span className="font-medium text-success">{formatCurrency(guest.valor)}</span>
                 </div>
-                 <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <CreditCard className="h-4 w-4 text-primary" />
                   <span>{getPaymentMethodText(guest.metodoPagamento)}</span>
                 </div>
@@ -336,7 +337,7 @@ export function GuestTable({ guests, onEdit, onDelete, onStatusChange }: GuestTa
                   </Dialog>
                 </div>
               )}
-              
+
               <div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
